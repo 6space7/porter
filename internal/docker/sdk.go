@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -23,6 +24,7 @@ type dockerClient interface {
 	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
 	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
 	ContainerStart(ctx context.Context, containerID string, options container.StartOptions) error
+	ContainerLogs(ctx context.Context, containerID string, options container.LogsOptions) (io.ReadCloser, error)
 }
 
 type SDKBackend struct {
@@ -122,6 +124,33 @@ func (backend *SDKBackend) ReplaceContainer(ctx context.Context, spec ContainerS
 		return "", fmt.Errorf("start container: %w", err)
 	}
 	return fmt.Sprintf("container %s started\n", created.ID), nil
+}
+
+func (backend *SDKBackend) StreamContainerLogs(ctx context.Context, containerName string) (io.ReadCloser, error) {
+	if backend == nil || backend.client == nil {
+		return nil, fmt.Errorf("docker client is required")
+	}
+	if containerName == "" {
+		return nil, fmt.Errorf("container name is required")
+	}
+
+	rawStream, err := backend.client.ContainerLogs(ctx, containerName, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+		Tail:       "100",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("stream container logs: %w", err)
+	}
+
+	reader, writer := io.Pipe()
+	go func() {
+		defer rawStream.Close()
+		_, copyErr := stdcopy.StdCopy(writer, writer, rawStream)
+		_ = writer.CloseWithError(copyErr)
+	}()
+	return reader, nil
 }
 
 func tarDirectory(root string) (io.Reader, error) {

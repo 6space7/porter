@@ -88,6 +88,33 @@ func TestSDKBackendReplaceContainerUsesSafeOptions(t *testing.T) {
 	}
 }
 
+func TestSDKBackendStreamsContainerLogs(t *testing.T) {
+	client := &fakeDockerClient{
+		logsResponse: io.NopCloser(strings.NewReader(multiplexedStdout("runtime line\n"))),
+	}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	stream, err := backend.StreamContainerLogs(context.Background(), "porter-app_1")
+	if err != nil {
+		t.Fatalf("stream container logs: %v", err)
+	}
+	defer stream.Close()
+
+	body, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+	if string(body) != "runtime line\n" {
+		t.Fatalf("body = %q", body)
+	}
+	if client.logsContainer != "porter-app_1" {
+		t.Fatalf("logs container = %q", client.logsContainer)
+	}
+	if !client.logsOptions.ShowStdout || !client.logsOptions.ShowStderr || !client.logsOptions.Follow || client.logsOptions.Tail != "100" {
+		t.Fatalf("logs options = %#v", client.logsOptions)
+	}
+}
+
 type fakeDockerClient struct {
 	buildContext  io.Reader
 	buildOptions  build.ImageBuildOptions
@@ -102,6 +129,10 @@ type fakeDockerClient struct {
 	containerConfig container.Config
 	hostConfig      container.HostConfig
 	networkConfig   network.NetworkingConfig
+
+	logsContainer string
+	logsOptions   container.LogsOptions
+	logsResponse  io.ReadCloser
 }
 
 func (client *fakeDockerClient) ImageBuild(_ context.Context, buildContext io.Reader, options build.ImageBuildOptions) (build.ImageBuildResponse, error) {
@@ -131,4 +162,16 @@ func (client *fakeDockerClient) ContainerCreate(_ context.Context, config *conta
 func (client *fakeDockerClient) ContainerStart(_ context.Context, containerID string, _ container.StartOptions) error {
 	client.startedID = containerID
 	return nil
+}
+
+func (client *fakeDockerClient) ContainerLogs(_ context.Context, containerID string, options container.LogsOptions) (io.ReadCloser, error) {
+	client.logsContainer = containerID
+	client.logsOptions = options
+	return client.logsResponse, nil
+}
+
+func multiplexedStdout(message string) string {
+	size := len(message)
+	header := []byte{1, 0, 0, 0, byte(size >> 24), byte(size >> 16), byte(size >> 8), byte(size)}
+	return string(header) + message
 }

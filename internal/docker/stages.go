@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -21,6 +22,10 @@ type ImageBackend interface {
 type ContainerBackend interface {
 	EnsureNetwork(ctx context.Context, name string) error
 	ReplaceContainer(ctx context.Context, spec ContainerSpec) (string, error)
+}
+
+type RuntimeLogBackend interface {
+	StreamContainerLogs(ctx context.Context, containerName string) (io.ReadCloser, error)
 }
 
 type ContainerSpec struct {
@@ -59,6 +64,10 @@ type Runner struct {
 	Containers ContainerBackend
 }
 
+type RuntimeLogs struct {
+	Containers RuntimeLogBackend
+}
+
 func (runner Runner) Run(ctx context.Context, req deploy.RunRequest) (string, error) {
 	if runner.Containers == nil {
 		return "", fmt.Errorf("container backend is required")
@@ -87,6 +96,16 @@ func (runner Runner) Run(ctx context.Context, req deploy.RunRequest) (string, er
 		MemoryBytes:  defaultMemoryBytes,
 		NanoCPUs:     defaultNanoCPUs,
 	})
+}
+
+func (logs RuntimeLogs) StreamRuntimeLogs(ctx context.Context, appID string) (io.ReadCloser, error) {
+	if logs.Containers == nil {
+		return nil, fmt.Errorf("container log backend is required")
+	}
+	if appID == "" {
+		return nil, fmt.Errorf("app id is required")
+	}
+	return logs.Containers.StreamContainerLogs(ctx, ContainerName(appID))
 }
 
 func ImageTag(appID, deploymentID string) string {

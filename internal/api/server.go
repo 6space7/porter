@@ -13,6 +13,7 @@ type Dependencies struct {
 	Domains       DomainService
 	EnvVars       EnvVarService
 	Deployments   DeploymentService
+	Logs          LogService
 	CaddyAsk      CaddyAskService
 }
 
@@ -44,6 +45,9 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 			}
 			if deps.Deployments != nil {
 				mountDeploymentRoutes(r, deps.Deployments)
+			}
+			if deps.Logs != nil {
+				mountLogRoutes(r, deps.Logs)
 			}
 		})
 	}

@@ -2,7 +2,9 @@ package docker_test
 
 import (
 	"context"
+	"io"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/6space7/porter/internal/deploy"
@@ -87,6 +89,28 @@ func TestRunnerCreatesNetworkAndReplacesContainerWithSafeDefaults(t *testing.T) 
 	}
 }
 
+func TestRuntimeLogsStreamsSanitizedAppContainerLogs(t *testing.T) {
+	containers := &fakeRuntimeLogBackend{stream: io.NopCloser(strings.NewReader("live\n"))}
+	runtimeLogs := dockerstage.RuntimeLogs{Containers: containers}
+
+	stream, err := runtimeLogs.StreamRuntimeLogs(context.Background(), "App 1")
+	if err != nil {
+		t.Fatalf("stream runtime logs: %v", err)
+	}
+	defer stream.Close()
+
+	body, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+	if string(body) != "live\n" {
+		t.Fatalf("body = %q", body)
+	}
+	if containers.containerName != "porter-app-1" {
+		t.Fatalf("container name = %q", containers.containerName)
+	}
+}
+
 type fakeImageBackend struct {
 	called    bool
 	sourceDir string
@@ -115,4 +139,14 @@ func (backend *fakeContainerBackend) EnsureNetwork(_ context.Context, name strin
 func (backend *fakeContainerBackend) ReplaceContainer(_ context.Context, spec dockerstage.ContainerSpec) (string, error) {
 	backend.spec = spec
 	return backend.log, nil
+}
+
+type fakeRuntimeLogBackend struct {
+	containerName string
+	stream        io.ReadCloser
+}
+
+func (backend *fakeRuntimeLogBackend) StreamContainerLogs(_ context.Context, containerName string) (io.ReadCloser, error) {
+	backend.containerName = containerName
+	return backend.stream, nil
 }

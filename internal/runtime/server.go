@@ -19,6 +19,7 @@ type Options struct {
 	Cloner       deploy.Cloner
 	Builder      deploy.Builder
 	Runner       deploy.Runner
+	RuntimeLogs  api.RuntimeLogStreamer
 	CaddyRuntime proxy.CaddyRuntime
 	CaddyAdmin   proxy.CaddyAdmin
 }
@@ -87,15 +88,17 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		}),
 		EnvVars:     envVars,
 		Deployments: api.NewStoreDeploymentService(queries, pipeline, envVars),
+		Logs:        api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
 		CaddyAsk:    api.NewStoreCaddyAskService(queries),
 	})
 	return db, handler, nil
 }
 
 type deploymentStages struct {
-	Cloner  deploy.Cloner
-	Builder deploy.Builder
-	Runner  deploy.Runner
+	Cloner      deploy.Cloner
+	Builder     deploy.Builder
+	Runner      deploy.Runner
+	RuntimeLogs api.RuntimeLogStreamer
 }
 
 func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
@@ -104,9 +107,10 @@ func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
 		return deploymentStages{}, err
 	}
 	return deploymentStages{
-		Cloner:  deploy.GitCloner{Root: cfg.WorkspacePath},
-		Builder: dockerstage.Builder{Images: backend},
-		Runner:  dockerstage.Runner{Containers: backend},
+		Cloner:      deploy.GitCloner{Root: cfg.WorkspacePath},
+		Builder:     dockerstage.Builder{Images: backend},
+		Runner:      dockerstage.Runner{Containers: backend},
+		RuntimeLogs: dockerstage.RuntimeLogs{Containers: backend},
 	}, nil
 }
 
@@ -125,6 +129,13 @@ func chooseBuilder(override deploy.Builder, fallback deploy.Builder) deploy.Buil
 }
 
 func chooseRunner(override deploy.Runner, fallback deploy.Runner) deploy.Runner {
+	if override != nil {
+		return override
+	}
+	return fallback
+}
+
+func chooseRuntimeLogs(override api.RuntimeLogStreamer, fallback api.RuntimeLogStreamer) api.RuntimeLogStreamer {
 	if override != nil {
 		return override
 	}
