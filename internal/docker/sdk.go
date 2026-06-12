@@ -82,6 +82,9 @@ func (backend *SDKBackend) EnsureNetwork(ctx context.Context, name string) error
 			"porter.managed": "true",
 		},
 	})
+	if err != nil && errdefs.IsConflict(err) {
+		return nil
+	}
 	return err
 }
 

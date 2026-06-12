@@ -110,6 +110,20 @@ func TestSDKBackendReplaceContainerIgnoresMissingExistingContainer(t *testing.T)
 	}
 }
 
+func TestSDKBackendEnsureNetworkIgnoresExistingNetwork(t *testing.T) {
+	client := &fakeDockerClient{
+		networkError: errdefs.Conflict(errors.New("network exists")),
+	}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	if err := backend.EnsureNetwork(context.Background(), "porter-proxy"); err != nil {
+		t.Fatalf("ensure network: %v", err)
+	}
+	if client.networkName != "porter-proxy" {
+		t.Fatalf("network name = %q", client.networkName)
+	}
+}
+
 func TestSDKBackendStreamsContainerLogs(t *testing.T) {
 	client := &fakeDockerClient{
 		logsResponse: io.NopCloser(strings.NewReader(multiplexedStdout("runtime line\n"))),
@@ -152,6 +166,8 @@ type fakeDockerClient struct {
 	containerConfig container.Config
 	hostConfig      container.HostConfig
 	networkConfig   network.NetworkingConfig
+	networkName     string
+	networkError    error
 
 	logsContainer string
 	logsOptions   container.LogsOptions
@@ -170,8 +186,9 @@ func (client *fakeDockerClient) ContainerRemove(_ context.Context, containerID s
 	return client.removeError
 }
 
-func (client *fakeDockerClient) NetworkCreate(_ context.Context, _ string, _ network.CreateOptions) (network.CreateResponse, error) {
-	return network.CreateResponse{ID: "network_1"}, nil
+func (client *fakeDockerClient) NetworkCreate(_ context.Context, name string, _ network.CreateOptions) (network.CreateResponse, error) {
+	client.networkName = name
+	return network.CreateResponse{ID: "network_1"}, client.networkError
 }
 
 func (client *fakeDockerClient) ContainerCreate(_ context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, _ *ocispec.Platform, containerName string) (container.CreateResponse, error) {
