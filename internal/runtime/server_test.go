@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -25,7 +26,7 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 	}
 	defer db.Close()
 
-	plaintext, record, err := auth.NewToken("writer", []string{"projects:read", "projects:write"})
+	plaintext, record, err := auth.NewToken("writer", []string{"projects:read", "projects:write", "apps:read", "apps:write"})
 	if err != nil {
 		t.Fatalf("new token: %v", err)
 	}
@@ -46,5 +47,28 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusCreated, rr.Body.String())
+	}
+
+	var project struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &project); err != nil {
+		t.Fatalf("decode project response: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/apps", bytes.NewBufferString(`{
+		"project_id":"`+project.ID+`",
+		"name":"web",
+		"git_url":"https://github.com/example/web.git",
+		"branch":"main",
+		"build_type":"dockerfile",
+		"internal_port":3000
+	}`))
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("app status = %d, want %d; body=%s", rr.Code, http.StatusCreated, rr.Body.String())
 	}
 }

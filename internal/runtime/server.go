@@ -19,6 +19,7 @@ func NewHandler(ctx context.Context, cfg config.Config) (*store.DB, http.Handler
 	handler := api.NewRouterWithDeps(api.Dependencies{
 		TokenVerifier: api.NewStoreTokenVerifier(queries),
 		Projects:      api.NewStoreProjectService(queries, nil),
+		Apps:          api.NewStoreAppService(queries, nil),
 	})
 	return db, handler, nil
 }
