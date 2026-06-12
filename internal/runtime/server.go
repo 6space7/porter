@@ -84,6 +84,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 			caddyAdmin = proxy.CaddyAdminClient{}
 		}
 	}
+	var routeUpdater api.RouteUpdater
 	if caddyAdmin != nil {
 		reconciler := proxy.Reconciler{
 			Source: routeSource(queries, cfg),
@@ -94,6 +95,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 			_ = db.Close()
 			return nil, nil, err
 		}
+		routeUpdater = reconciler
 	}
 	pipeline := deploy.Pipeline{
 		Store:   deploy.NewStoreDeploymentStore(queries, nil),
@@ -110,11 +112,13 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		TokenVerifier: api.NewStoreTokenVerifier(queries),
 		Projects:      api.NewStoreProjectService(queries, nil),
 		Apps: api.NewStoreAppServiceWithOptions(queries, api.StoreAppServiceOptions{
-			PublicIP: cfg.PublicIP,
+			PublicIP:     cfg.PublicIP,
+			RouteUpdater: routeUpdater,
 		}),
 		Domains: api.NewStoreDomainService(queries, api.StoreDomainServiceOptions{
-			Resolver: opts.Resolver,
-			ServerIP: cfg.PublicIP,
+			Resolver:     opts.Resolver,
+			ServerIP:     cfg.PublicIP,
+			RouteUpdater: routeUpdater,
 		}),
 		EnvVars:     envVars,
 		Deployments: api.NewStoreDeploymentService(queries, pipeline, envVars),

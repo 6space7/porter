@@ -9,17 +9,23 @@ import (
 
 type appIDFunc func() string
 
+type RouteUpdater interface {
+	Reconcile(ctx context.Context) error
+}
+
 type StoreAppServiceOptions struct {
-	NewAppID    func() string
-	NewDomainID func() string
-	PublicIP    string
+	NewAppID     func() string
+	NewDomainID  func() string
+	PublicIP     string
+	RouteUpdater RouteUpdater
 }
 
 type storeAppService struct {
-	queries     *store.Queries
-	newAppID    appIDFunc
-	newDomainID appIDFunc
-	publicIP    string
+	queries      *store.Queries
+	newAppID     appIDFunc
+	newDomainID  appIDFunc
+	publicIP     string
+	routeUpdater RouteUpdater
 }
 
 func NewStoreAppService(queries *store.Queries, newID appIDFunc) AppService {
@@ -38,10 +44,11 @@ func NewStoreAppServiceWithOptions(queries *store.Queries, opts StoreAppServiceO
 		}
 	}
 	return storeAppService{
-		queries:     queries,
-		newAppID:    opts.NewAppID,
-		newDomainID: opts.NewDomainID,
-		publicIP:    opts.PublicIP,
+		queries:      queries,
+		newAppID:     opts.NewAppID,
+		newDomainID:  opts.NewDomainID,
+		publicIP:     opts.PublicIP,
+		routeUpdater: opts.RouteUpdater,
 	}
 }
 
@@ -73,6 +80,11 @@ func (service storeAppService) CreateApp(ctx context.Context, input CreateAppInp
 			Verified: 1,
 		}); err != nil {
 			return AppResponse{}, err
+		}
+		if service.routeUpdater != nil {
+			if err := service.routeUpdater.Reconcile(ctx); err != nil {
+				return AppResponse{}, err
+			}
 		}
 	}
 	return appResponse(app), nil

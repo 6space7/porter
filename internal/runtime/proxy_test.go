@@ -190,12 +190,14 @@ func seedVerifiedDomain(t *testing.T, ctx context.Context, dbPath string) {
 
 type fakeCaddyAdmin struct {
 	called bool
+	calls  int
 	config proxy.CaddyConfig
 	events *[]string
 }
 
 func (admin *fakeCaddyAdmin) ApplyConfig(_ context.Context, config proxy.CaddyConfig) error {
 	admin.called = true
+	admin.calls++
 	admin.config = config
 	if admin.events != nil {
 		*admin.events = append(*admin.events, "reconcile")

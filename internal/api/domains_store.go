@@ -10,16 +10,18 @@ import (
 )
 
 type StoreDomainServiceOptions struct {
-	Resolver    proxy.Resolver
-	ServerIP    string
-	NewDomainID func() string
+	Resolver     proxy.Resolver
+	ServerIP     string
+	NewDomainID  func() string
+	RouteUpdater RouteUpdater
 }
 
 type storeDomainService struct {
-	queries     *store.Queries
-	resolver    proxy.Resolver
-	serverIP    string
-	newDomainID func() string
+	queries      *store.Queries
+	resolver     proxy.Resolver
+	serverIP     string
+	newDomainID  func() string
+	routeUpdater RouteUpdater
 }
 
 func NewStoreDomainService(queries *store.Queries, opts StoreDomainServiceOptions) DomainService {
@@ -34,10 +36,11 @@ func NewStoreDomainService(queries *store.Queries, opts StoreDomainServiceOption
 		}
 	}
 	return storeDomainService{
-		queries:     queries,
-		resolver:    resolver,
-		serverIP:    opts.ServerIP,
-		newDomainID: newDomainID,
+		queries:      queries,
+		resolver:     resolver,
+		serverIP:     opts.ServerIP,
+		newDomainID:  newDomainID,
+		routeUpdater: opts.RouteUpdater,
 	}
 }
 
@@ -58,6 +61,11 @@ func (service storeDomainService) AddCustomDomain(ctx context.Context, appID, ho
 	})
 	if err != nil {
 		return DomainResponse{}, err
+	}
+	if service.routeUpdater != nil {
+		if err := service.routeUpdater.Reconcile(ctx); err != nil {
+			return DomainResponse{}, err
+		}
 	}
 	return domainResponse(domain), nil
 }
