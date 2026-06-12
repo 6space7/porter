@@ -10,6 +10,7 @@ var (
 	appNamePattern     = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 	domainLabelPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 	branchPattern      = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+	envKeyPattern      = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
 )
 
 func ValidateAppName(name string) error {
@@ -72,6 +73,13 @@ func ValidateDomainName(domain string) error {
 		if !domainLabelPattern.MatchString(label) {
 			return fmt.Errorf("domain label %q is invalid", label)
 		}
+	}
+	return nil
+}
+
+func ValidateEnvKey(key string) error {
+	if !envKeyPattern.MatchString(key) {
+		return fmt.Errorf("env var key must be uppercase letters, numbers, and underscores")
 	}
 	return nil
 }

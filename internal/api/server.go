@@ -11,6 +11,7 @@ type Dependencies struct {
 	Projects      ProjectService
 	Apps          AppService
 	Domains       DomainService
+	EnvVars       EnvVarService
 }
 
 func NewRouter() http.Handler {
@@ -32,6 +33,9 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 			}
 			if deps.Domains != nil {
 				mountDomainRoutes(r, deps.Domains)
+			}
+			if deps.EnvVars != nil {
+				mountEnvVarRoutes(r, deps.EnvVars)
 			}
 		})
 	}
