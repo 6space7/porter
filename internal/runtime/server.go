@@ -8,6 +8,7 @@ import (
 	"github.com/6space7/porter/internal/config"
 	secretcrypto "github.com/6space7/porter/internal/crypto"
 	"github.com/6space7/porter/internal/deploy"
+	dockerstage "github.com/6space7/porter/internal/docker"
 	"github.com/6space7/porter/internal/proxy"
 	"github.com/6space7/porter/internal/store"
 )
@@ -32,11 +33,16 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 
 	queries := store.New(db.SQL())
 	envVars := api.NewStoreEnvVarService(queries, opts.SecretBox)
+	defaultStages, err := defaultDeploymentStages(cfg)
+	if err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
 	pipeline := deploy.Pipeline{
 		Store:   deploy.NewStoreDeploymentStore(queries, nil),
-		Cloner:  opts.Cloner,
-		Builder: opts.Builder,
-		Runner:  opts.Runner,
+		Cloner:  chooseCloner(opts.Cloner, defaultStages.Cloner),
+		Builder: chooseBuilder(opts.Builder, defaultStages.Builder),
+		Runner:  chooseRunner(opts.Runner, defaultStages.Runner),
 	}
 	handler := api.NewRouterWithDeps(api.Dependencies{
 		TokenVerifier: api.NewStoreTokenVerifier(queries),
@@ -52,4 +58,43 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		Deployments: api.NewStoreDeploymentService(queries, pipeline, envVars),
 	})
 	return db, handler, nil
+}
+
+type deploymentStages struct {
+	Cloner  deploy.Cloner
+	Builder deploy.Builder
+	Runner  deploy.Runner
+}
+
+func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
+	backend, err := dockerstage.NewSDKBackend()
+	if err != nil {
+		return deploymentStages{}, err
+	}
+	return deploymentStages{
+		Cloner:  deploy.GitCloner{Root: cfg.WorkspacePath},
+		Builder: dockerstage.Builder{Images: backend},
+		Runner:  dockerstage.Runner{Containers: backend},
+	}, nil
+}
+
+func chooseCloner(override deploy.Cloner, fallback deploy.Cloner) deploy.Cloner {
+	if override != nil {
+		return override
+	}
+	return fallback
+}
+
+func chooseBuilder(override deploy.Builder, fallback deploy.Builder) deploy.Builder {
+	if override != nil {
+		return override
+	}
+	return fallback
+}
+
+func chooseRunner(override deploy.Runner, fallback deploy.Runner) deploy.Runner {
+	if override != nil {
+		return override
+	}
+	return fallback
 }
