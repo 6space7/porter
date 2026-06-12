@@ -19,6 +19,13 @@ func ValidateAppName(name string) error {
 	return nil
 }
 
+func ValidateProjectName(name string) error {
+	if !appNamePattern.MatchString(name) {
+		return fmt.Errorf("project name must be 1-63 lowercase letters, numbers, or hyphens")
+	}
+	return nil
+}
+
 func ValidateBuildType(buildType string) error {
 	switch buildType {
 	case "dockerfile", "nixpacks":
