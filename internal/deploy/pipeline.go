@@ -33,12 +33,13 @@ type Request struct {
 }
 
 type DeploymentRecord struct {
-	ID       string
-	AppID    string
-	Status   Status
-	Stage    Stage
-	BuildLog string
-	ImageTag string
+	ID           string
+	AppID        string
+	Status       Status
+	Stage        Stage
+	BuildLog     string
+	ImageTag     string
+	InternalPort int64
 }
 
 type DeploymentStore interface {
@@ -108,10 +109,11 @@ func (fn RunnerFunc) Run(ctx context.Context, req RunRequest) (string, error) {
 }
 
 type Pipeline struct {
-	Store   DeploymentStore
-	Cloner  Cloner
-	Builder Builder
-	Runner  Runner
+	Store        DeploymentStore
+	Cloner       Cloner
+	PortDetector PortDetector
+	Builder      Builder
+	Runner       Runner
 }
 
 func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord, error) {
@@ -135,6 +137,18 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 		return pipeline.fail(ctx, record, StageCloning, logs.String(), req.Secrets, err)
 	}
 
+	internalPort := req.InternalPort
+	if pipeline.PortDetector != nil {
+		detectedPort, ok, err := pipeline.PortDetector.DetectPort(ctx, cloneResult.SourceDir)
+		if err != nil {
+			return pipeline.fail(ctx, record, StageBuilding, logs.String(), req.Secrets, err)
+		}
+		if ok {
+			internalPort = detectedPort
+			record.InternalPort = detectedPort
+		}
+	}
+
 	if err := pipeline.mark(ctx, &record, StatusRunning, StageBuilding, RedactSecrets(logs.String(), req.Secrets), ""); err != nil {
 		return record, err
 	}
@@ -155,7 +169,7 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 		AppID:        req.AppID,
 		DeploymentID: record.ID,
 		ImageTag:     buildResult.ImageTag,
-		InternalPort: req.InternalPort,
+		InternalPort: internalPort,
 		Env:          copyEnv(req.Env),
 	})
 	logs.WriteString(runLog)

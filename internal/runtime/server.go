@@ -98,10 +98,11 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		routeUpdater = reconciler
 	}
 	pipeline := deploy.Pipeline{
-		Store:   deploy.NewStoreDeploymentStore(queries, nil),
-		Cloner:  chooseCloner(opts.Cloner, defaultStages.Cloner),
-		Builder: chooseBuilder(opts.Builder, defaultStages.Builder),
-		Runner:  chooseRunner(opts.Runner, defaultStages.Runner),
+		Store:        deploy.NewStoreDeploymentStore(queries, nil),
+		Cloner:       chooseCloner(opts.Cloner, defaultStages.Cloner),
+		PortDetector: deploy.DockerfilePortDetector{},
+		Builder:      chooseBuilder(opts.Builder, defaultStages.Builder),
+		Runner:       chooseRunner(opts.Runner, defaultStages.Runner),
 	}
 	caddyAsk := api.NewStoreCaddyAskService(queries)
 	if strings.TrimSpace(cfg.PlatformDomain) != "" {
@@ -120,10 +121,12 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 			ServerIP:     cfg.PublicIP,
 			RouteUpdater: routeUpdater,
 		}),
-		EnvVars:     envVars,
-		Deployments: api.NewStoreDeploymentService(queries, pipeline, envVars),
-		Logs:        api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
-		CaddyAsk:    caddyAsk,
+		EnvVars: envVars,
+		Deployments: api.NewStoreDeploymentServiceWithOptions(queries, pipeline, envVars, api.StoreDeploymentServiceOptions{
+			RouteUpdater: routeUpdater,
+		}),
+		Logs:     api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
+		CaddyAsk: caddyAsk,
 	})
 	return db, handler, nil
 }

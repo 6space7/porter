@@ -8,13 +8,27 @@ import (
 )
 
 type storeDeploymentService struct {
-	queries  *store.Queries
-	pipeline deploy.Pipeline
-	envVars  EnvVarService
+	queries      *store.Queries
+	pipeline     deploy.Pipeline
+	envVars      EnvVarService
+	routeUpdater RouteUpdater
+}
+
+type StoreDeploymentServiceOptions struct {
+	RouteUpdater RouteUpdater
 }
 
 func NewStoreDeploymentService(queries *store.Queries, pipeline deploy.Pipeline, envVars EnvVarService) DeploymentService {
-	return storeDeploymentService{queries: queries, pipeline: pipeline, envVars: envVars}
+	return NewStoreDeploymentServiceWithOptions(queries, pipeline, envVars, StoreDeploymentServiceOptions{})
+}
+
+func NewStoreDeploymentServiceWithOptions(queries *store.Queries, pipeline deploy.Pipeline, envVars EnvVarService, opts StoreDeploymentServiceOptions) DeploymentService {
+	return storeDeploymentService{
+		queries:      queries,
+		pipeline:     pipeline,
+		envVars:      envVars,
+		routeUpdater: opts.RouteUpdater,
+	}
 }
 
 func (service storeDeploymentService) DeployApp(ctx context.Context, appID string) (DeploymentResponse, error) {
@@ -39,7 +53,26 @@ func (service storeDeploymentService) DeployApp(ctx context.Context, appID strin
 	if err != nil {
 		return deploymentResponseFromRecord(record), err
 	}
+	if err := service.persistDetectedPort(ctx, app.ID, app.InternalPort, record.InternalPort); err != nil {
+		return deploymentResponseFromRecord(record), err
+	}
 	return deploymentResponseFromRecord(record), nil
+}
+
+func (service storeDeploymentService) persistDetectedPort(ctx context.Context, appID string, storedPort, detectedPort int64) error {
+	if detectedPort == 0 || detectedPort == storedPort {
+		return nil
+	}
+	if err := service.queries.UpdateAppInternalPort(ctx, store.UpdateAppInternalPortParams{
+		InternalPort: detectedPort,
+		ID:           appID,
+	}); err != nil {
+		return err
+	}
+	if service.routeUpdater != nil {
+		return service.routeUpdater.Reconcile(ctx)
+	}
+	return nil
 }
 
 func (service storeDeploymentService) ListDeployments(ctx context.Context, appID string) ([]DeploymentResponse, error) {

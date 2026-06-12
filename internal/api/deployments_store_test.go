@@ -61,6 +61,51 @@ func TestStoreDeploymentServiceRunsPipelineAndListsDeployments(t *testing.T) {
 	}
 }
 
+func TestStoreDeploymentServicePersistsDetectedPortAndReconcilesRoutes(t *testing.T) {
+	ctx := context.Background()
+	queries, closeDB := setupAppForDeploymentServiceTest(t, ctx)
+	defer closeDB()
+	routeUpdater := &fakeRouteUpdater{}
+
+	pipeline := deploy.Pipeline{
+		Store: deploy.NewStoreDeploymentStore(queries, func() string {
+			return "dep_1"
+		}),
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source"}, nil
+		}),
+		PortDetector: deploy.PortDetectorFunc(func(context.Context, string) (int64, bool, error) {
+			return 8080, true, nil
+		}),
+		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
+			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1"}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(_ context.Context, req deploy.RunRequest) (string, error) {
+			if req.InternalPort != 8080 {
+				t.Fatalf("internal port = %d, want 8080", req.InternalPort)
+			}
+			return "started\n", nil
+		}),
+	}
+	service := api.NewStoreDeploymentServiceWithOptions(queries, pipeline, nil, api.StoreDeploymentServiceOptions{
+		RouteUpdater: routeUpdater,
+	})
+
+	if _, err := service.DeployApp(ctx, "app_1"); err != nil {
+		t.Fatalf("deploy app: %v", err)
+	}
+	app, err := queries.GetApp(ctx, "app_1")
+	if err != nil {
+		t.Fatalf("get app: %v", err)
+	}
+	if app.InternalPort != 8080 {
+		t.Fatalf("stored internal port = %d, want 8080", app.InternalPort)
+	}
+	if routeUpdater.calls != 1 {
+		t.Fatalf("route updater calls = %d, want 1", routeUpdater.calls)
+	}
+}
+
 func setupAppForDeploymentServiceTest(t *testing.T, ctx context.Context) (*store.Queries, func()) {
 	t.Helper()
 
@@ -93,4 +138,13 @@ func setupAppForDeploymentServiceTest(t *testing.T, ctx context.Context) (*store
 			t.Fatalf("close db: %v", err)
 		}
 	}
+}
+
+type fakeRouteUpdater struct {
+	calls int
+}
+
+func (updater *fakeRouteUpdater) Reconcile(context.Context) error {
+	updater.calls++
+	return nil
 }

@@ -135,6 +135,44 @@ func TestPipelinePassesEnvAndInternalPortToRunner(t *testing.T) {
 	}
 }
 
+func TestPipelineUsesDetectedDockerfilePortForRunner(t *testing.T) {
+	store := &fakeDeploymentStore{}
+	pipeline := deploy.Pipeline{
+		Store: store,
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source"}, nil
+		}),
+		PortDetector: deploy.PortDetectorFunc(func(_ context.Context, sourceDir string) (int64, bool, error) {
+			if sourceDir != "work/app_1/dep_1/source" {
+				t.Fatalf("source dir = %q", sourceDir)
+			}
+			return 8080, true, nil
+		}),
+		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
+			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1"}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(_ context.Context, req deploy.RunRequest) (string, error) {
+			if req.InternalPort != 8080 {
+				t.Fatalf("internal port = %d, want detected 8080", req.InternalPort)
+			}
+			return "started\n", nil
+		}),
+	}
+
+	result, err := pipeline.Run(context.Background(), deploy.Request{
+		AppID:        "app_1",
+		GitURL:       "https://github.com/example/web.git",
+		Branch:       "main",
+		InternalPort: 3000,
+	})
+	if err != nil {
+		t.Fatalf("run pipeline: %v", err)
+	}
+	if result.InternalPort != 8080 {
+		t.Fatalf("detected internal port = %d, want 8080", result.InternalPort)
+	}
+}
+
 type fakeDeploymentStore struct {
 	records []deploy.DeploymentRecord
 }

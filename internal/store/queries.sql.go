@@ -678,6 +678,22 @@ func (q *Queries) UpdateAppStatus(ctx context.Context, arg UpdateAppStatusParams
 	return err
 }
 
+const updateAppInternalPort = `-- name: UpdateAppInternalPort :exec
+update apps
+set internal_port = ?, updated_at = current_timestamp
+where id = ?
+`
+
+type UpdateAppInternalPortParams struct {
+	InternalPort int64  `json:"internal_port"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) UpdateAppInternalPort(ctx context.Context, arg UpdateAppInternalPortParams) error {
+	_, err := q.exec(ctx, q.updateAppInternalPortStmt, updateAppInternalPort, arg.InternalPort, arg.ID)
+	return err
+}
+
 const updateDeploymentStatus = `-- name: UpdateDeploymentStatus :exec
 update deployments
 set status = ?, stage = ?, build_log = ?, image_tag = ?

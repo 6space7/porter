@@ -53,6 +53,11 @@ update apps
 set status = ?, updated_at = current_timestamp
 where id = ?;
 
+-- name: UpdateAppInternalPort :exec
+update apps
+set internal_port = ?, updated_at = current_timestamp
+where id = ?;
+
 -- name: DeleteApp :exec
 delete from apps
 where id = ?;
