@@ -5,7 +5,10 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"os"
+	"strings"
 )
 
 const masterKeySize = 32
@@ -28,6 +31,19 @@ func NewSecretBox(masterKey []byte) (*SecretBox, error) {
 	}
 	key := append([]byte(nil), masterKey...)
 	return &SecretBox{key: key}, nil
+}
+
+func LoadSecretBox(path string) (*SecretBox, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read master key: %w", err)
+	}
+	encoded := strings.TrimSpace(string(raw))
+	key, err := decodeMasterKey(encoded)
+	if err != nil {
+		return nil, err
+	}
+	return NewSecretBox(key)
 }
 
 func (box *SecretBox) Encrypt(plaintext string) (string, error) {
@@ -71,6 +87,19 @@ func (box *SecretBox) Decrypt(encoded string) (string, error) {
 
 func MaskSecret() string {
 	return "••••"
+}
+
+func decodeMasterKey(encoded string) ([]byte, error) {
+	if key, err := hex.DecodeString(encoded); err == nil {
+		return key, nil
+	}
+	if key, err := base64.RawStdEncoding.DecodeString(encoded); err == nil {
+		return key, nil
+	}
+	if key, err := base64.StdEncoding.DecodeString(encoded); err == nil {
+		return key, nil
+	}
+	return nil, fmt.Errorf("master key must be hex or base64")
 }
 
 func (box *SecretBox) gcm() (cipher.AEAD, error) {

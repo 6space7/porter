@@ -25,3 +25,30 @@ func TestLoadCanDisableManagedCaddy(t *testing.T) {
 		t.Fatal("managed caddy should be disabled")
 	}
 }
+
+func TestLoadUsesInstallPathsByDefault(t *testing.T) {
+	t.Setenv("PORTER_DATABASE_PATH", "")
+	t.Setenv("PORTER_WORKSPACE_PATH", "")
+
+	cfg := config.Load()
+
+	if cfg.DatabasePath != "/var/lib/porter/porter.db" {
+		t.Fatalf("database path = %q", cfg.DatabasePath)
+	}
+	if cfg.WorkspacePath != "/var/lib/porter/work" {
+		t.Fatalf("workspace path = %q", cfg.WorkspacePath)
+	}
+	if cfg.MasterKeyPath != "/etc/porter/master.key" {
+		t.Fatalf("master key path = %q", cfg.MasterKeyPath)
+	}
+}
+
+func TestLoadReadsBootstrapTokenHash(t *testing.T) {
+	t.Setenv("PORTER_BOOTSTRAP_TOKEN_HASH", "abc123")
+
+	cfg := config.Load()
+
+	if cfg.BootstrapTokenHash != "abc123" {
+		t.Fatalf("bootstrap token hash = %q", cfg.BootstrapTokenHash)
+	}
+}

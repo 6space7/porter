@@ -2,7 +2,12 @@ package runtime
 
 import (
 	"context"
+	"database/sql"
+	"encoding/hex"
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/6space7/porter/internal/api"
 	"github.com/6space7/porter/internal/config"
@@ -35,9 +40,21 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 	}
 
 	queries := store.New(db.SQL())
-	envVars := api.NewStoreEnvVarService(queries, opts.SecretBox)
+	secretBox := opts.SecretBox
+	if secretBox == nil && cfg.MasterKeyPath != "" {
+		secretBox, err = secretcrypto.LoadSecretBox(cfg.MasterKeyPath)
+		if err != nil {
+			_ = db.Close()
+			return nil, nil, err
+		}
+	}
+	envVars := api.NewStoreEnvVarService(queries, secretBox)
 	defaultStages, err := defaultDeploymentStages(cfg)
 	if err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
+	if err := bootstrapAdminToken(ctx, queries, cfg.BootstrapTokenHash); err != nil {
 		_ = db.Close()
 		return nil, nil, err
 	}
@@ -140,4 +157,33 @@ func chooseRuntimeLogs(override api.RuntimeLogStreamer, fallback api.RuntimeLogS
 		return override
 	}
 	return fallback
+}
+
+func bootstrapAdminToken(ctx context.Context, queries *store.Queries, hash string) error {
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return nil
+	}
+	if len(hash) != 64 {
+		return fmt.Errorf("bootstrap token hash must be a sha256 hex digest")
+	}
+	if _, err := hex.DecodeString(hash); err != nil {
+		return fmt.Errorf("bootstrap token hash must be a sha256 hex digest")
+	}
+	if _, err := queries.GetTokenByHash(ctx, hash); err == nil {
+		return nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+
+	_, err := queries.CreateToken(ctx, store.CreateTokenParams{
+		ID:     "tok_bootstrap",
+		Name:   "bootstrap",
+		Hash:   hash,
+		Scopes: "projects:read,projects:write,apps:read,apps:write,apps:deploy",
+	})
+	if err != nil {
+		return fmt.Errorf("create bootstrap token: %w", err)
+	}
+	return nil
 }

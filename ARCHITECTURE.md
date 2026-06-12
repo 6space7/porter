@@ -1,11 +1,13 @@
 # Architecture
 
-porter is planned as a single Go binary that serves the API, embedded frontend, migrations, and later the MCP server.
+porter is a single Go binary. In Phase 1 it serves the JSON API, runs SQLite
+migrations, talks to Docker, manages Caddy, and exposes deployment logs.
+Later phases add the embedded frontend and MCP server.
 
 ## Fixed Stack
 
 - Backend: Go with `chi`
-- Database: SQLite through `modernc.org/sqlite`, `sqlc`, and `goose`
+- Database: SQLite through `modernc.org/sqlite` and `sqlc`
 - Docker: official Go Docker SDK
 - Proxy: Caddy managed through its admin API
 - Frontend: Svelte 5, Vite, and TypeScript embedded with `//go:embed`
@@ -13,18 +15,32 @@ porter is planned as a single Go binary that serves the API, embedded frontend, 
 
 ## Package Layout
 
-The codebase will use domain-based packages:
+The codebase uses domain-based packages:
 
 - `cmd/server/main.go`
 - `internal/api`
+- `internal/auth`
+- `internal/config`
+- `internal/crypto`
 - `internal/deploy`
 - `internal/docker`
+- `internal/install`
 - `internal/proxy`
+- `internal/runtime`
 - `internal/store`
-- `internal/services`
-- `internal/mcp`
-- `frontend`
 
 ## Design Notes
 
 All product behavior must be reachable through `/api/v1/...`; the web UI, future CLI, and MCP server are clients of that API.
+
+Runtime startup opens the SQLite database, loads the master key when configured,
+bootstraps an initial hashed admin bearer token when provided, prepares Docker
+deployment/log backends, optionally ensures the managed Caddy container exists,
+reconciles verified domains into Caddy, and then serves the API.
+
+Production source installs use:
+
+- `/etc/porter` for config and the master key;
+- `/var/lib/porter` for the SQLite database and workspaces;
+- `/usr/local/bin/porter` for the built binary;
+- `porter.service` for systemd supervision.
