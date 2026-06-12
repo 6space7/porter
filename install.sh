@@ -227,7 +227,8 @@ EOF
 
 start_service() {
 	systemctl daemon-reload
-	systemctl enable --now porter
+	systemctl enable porter
+	systemctl restart porter
 }
 
 print_summary() {

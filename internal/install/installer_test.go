@@ -30,3 +30,16 @@ func TestInstallerInstallsGoBeforeBuildingFromSource(t *testing.T) {
 		t.Fatal("installer must download Go from the official Go distribution host")
 	}
 }
+
+func TestInstallerRestartsExistingPorterServiceAfterRebuild(t *testing.T) {
+	scriptPath := filepath.Join("..", "..", "install.sh")
+	raw, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read install script: %v", err)
+	}
+	script := string(raw)
+
+	if !strings.Contains(script, "systemctl restart porter") {
+		t.Fatal("installer must restart porter so upgrades run the newly built binary")
+	}
+}
