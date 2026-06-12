@@ -20,6 +20,7 @@ type Dependencies struct {
 	CaddyAsk            CaddyAskService
 	Services            ServiceManager
 	Webhooks            AppWebhookService
+	Servers             ServerService
 	MCP                 http.Handler
 }
 
@@ -82,6 +83,9 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 				}
 				if deps.Services != nil {
 					mountServiceRoutes(protected, deps.Services)
+				}
+				if deps.Servers != nil {
+					mountServerRoutes(protected, deps.Servers)
 				}
 				if deps.MCP != nil {
 					protected.Mount("/mcp", deps.MCP)

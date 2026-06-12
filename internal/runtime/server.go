@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,7 @@ import (
 	frontendhandler "github.com/6space7/porter/internal/frontend"
 	portermcp "github.com/6space7/porter/internal/mcp"
 	"github.com/6space7/porter/internal/proxy"
+	"github.com/6space7/porter/internal/remote"
 	"github.com/6space7/porter/internal/services"
 	"github.com/6space7/porter/internal/store"
 	servicetemplates "github.com/6space7/porter/templates"
@@ -146,6 +148,10 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		RouteUpdater: routeUpdater,
 		PublicIP:     cfg.PublicIP,
 	})
+	serverService := api.NewStoreServerServiceWithOptions(queries, api.StoreServerServiceOptions{
+		Validator: remote.SSHValidator{},
+		KeyStore:  remote.FileKeyStore{Dir: filepath.Join(filepath.Dir(cfg.DatabasePath), "ssh-keys")},
+	})
 	mcpServer := portermcp.NewServer(portermcp.Dependencies{
 		Projects:    projectService,
 		Apps:        appService,
@@ -166,6 +172,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		Logs:          logService,
 		CaddyAsk:      caddyAsk,
 		Services:      serviceManager,
+		Servers:       serverService,
 		MCP:           mcpsdkserver.NewStreamableHTTPServer(mcpServer),
 	})
 	handler := docs.NewHandler(docs.Config{PlatformDomain: cfg.PlatformDomain}, frontendhandler.NewHandler(apiHandler, uifrontend.Dist()))

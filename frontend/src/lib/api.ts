@@ -7,12 +7,14 @@ import type {
   CreateAppInput,
   CreateServiceInput,
   CreateServiceResponse,
+  CreateServerInput,
   Deployment,
   Domain,
   EnvVar,
   NewEnvVarInput,
   Project,
   Service,
+  Server,
   ServiceTemplate,
   UpdateAppInput,
   UpdateWebhookInput,
@@ -157,6 +159,14 @@ export class PorterApi {
 
   async services() {
     return this.request<Service[]>('GET', '/services')
+  }
+
+  async servers() {
+    return this.request<Server[]>('GET', '/servers')
+  }
+
+  async createServer(input: CreateServerInput) {
+    return this.request<Server>('POST', '/servers', input as unknown as RequestBody)
   }
 
   async createService(input: CreateServiceInput) {

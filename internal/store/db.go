@@ -39,6 +39,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createProjectStmt, err = db.PrepareContext(ctx, createProject); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateProject: %w", err)
 	}
+	if q.createServerStmt, err = db.PrepareContext(ctx, createServer); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateServer: %w", err)
+	}
 	if q.createServiceStmt, err = db.PrepareContext(ctx, createService); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateService: %w", err)
 	}
@@ -108,6 +111,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listProjectsStmt, err = db.PrepareContext(ctx, listProjects); err != nil {
 		return nil, fmt.Errorf("error preparing query ListProjects: %w", err)
 	}
+	if q.listServersStmt, err = db.PrepareContext(ctx, listServers); err != nil {
+		return nil, fmt.Errorf("error preparing query ListServers: %w", err)
+	}
 	if q.listServicesStmt, err = db.PrepareContext(ctx, listServices); err != nil {
 		return nil, fmt.Errorf("error preparing query ListServices: %w", err)
 	}
@@ -137,6 +143,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateProjectNameStmt, err = db.PrepareContext(ctx, updateProjectName); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateProjectName: %w", err)
+	}
+	if q.updateServerStatusStmt, err = db.PrepareContext(ctx, updateServerStatus); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateServerStatus: %w", err)
 	}
 	if q.upsertEnvVarStmt, err = db.PrepareContext(ctx, upsertEnvVar); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertEnvVar: %w", err)
@@ -169,6 +178,11 @@ func (q *Queries) Close() error {
 	if q.createProjectStmt != nil {
 		if cerr := q.createProjectStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createProjectStmt: %w", cerr)
+		}
+	}
+	if q.createServerStmt != nil {
+		if cerr := q.createServerStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createServerStmt: %w", cerr)
 		}
 	}
 	if q.createServiceStmt != nil {
@@ -286,6 +300,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listProjectsStmt: %w", cerr)
 		}
 	}
+	if q.listServersStmt != nil {
+		if cerr := q.listServersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listServersStmt: %w", cerr)
+		}
+	}
 	if q.listServicesStmt != nil {
 		if cerr := q.listServicesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listServicesStmt: %w", cerr)
@@ -334,6 +353,11 @@ func (q *Queries) Close() error {
 	if q.updateProjectNameStmt != nil {
 		if cerr := q.updateProjectNameStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateProjectNameStmt: %w", cerr)
+		}
+	}
+	if q.updateServerStatusStmt != nil {
+		if cerr := q.updateServerStatusStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateServerStatusStmt: %w", cerr)
 		}
 	}
 	if q.upsertEnvVarStmt != nil {
@@ -385,6 +409,7 @@ type Queries struct {
 	createDeploymentStmt        *sql.Stmt
 	createDomainStmt            *sql.Stmt
 	createProjectStmt           *sql.Stmt
+	createServerStmt            *sql.Stmt
 	createServiceStmt           *sql.Stmt
 	createTokenStmt             *sql.Stmt
 	createUserStmt              *sql.Stmt
@@ -408,6 +433,7 @@ type Queries struct {
 	listDomainsByAppStmt        *sql.Stmt
 	listEnvVarsByAppStmt        *sql.Stmt
 	listProjectsStmt            *sql.Stmt
+	listServersStmt             *sql.Stmt
 	listServicesStmt            *sql.Stmt
 	listVerifiedProxyRoutesStmt *sql.Stmt
 	updateAppStmt               *sql.Stmt
@@ -418,6 +444,7 @@ type Queries struct {
 	updateDeploymentStatusStmt  *sql.Stmt
 	updateDomainVerifiedStmt    *sql.Stmt
 	updateProjectNameStmt       *sql.Stmt
+	updateServerStatusStmt      *sql.Stmt
 	upsertEnvVarStmt            *sql.Stmt
 }
 
@@ -430,6 +457,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createDeploymentStmt:        q.createDeploymentStmt,
 		createDomainStmt:            q.createDomainStmt,
 		createProjectStmt:           q.createProjectStmt,
+		createServerStmt:            q.createServerStmt,
 		createServiceStmt:           q.createServiceStmt,
 		createTokenStmt:             q.createTokenStmt,
 		createUserStmt:              q.createUserStmt,
@@ -453,6 +481,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listDomainsByAppStmt:        q.listDomainsByAppStmt,
 		listEnvVarsByAppStmt:        q.listEnvVarsByAppStmt,
 		listProjectsStmt:            q.listProjectsStmt,
+		listServersStmt:             q.listServersStmt,
 		listServicesStmt:            q.listServicesStmt,
 		listVerifiedProxyRoutesStmt: q.listVerifiedProxyRoutesStmt,
 		updateAppStmt:               q.updateAppStmt,
@@ -463,6 +492,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateDeploymentStatusStmt:  q.updateDeploymentStatusStmt,
 		updateDomainVerifiedStmt:    q.updateDomainVerifiedStmt,
 		updateProjectNameStmt:       q.updateProjectNameStmt,
+		updateServerStatusStmt:      q.updateServerStatusStmt,
 		upsertEnvVarStmt:            q.upsertEnvVarStmt,
 	}
 }

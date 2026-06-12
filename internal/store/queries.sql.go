@@ -174,6 +174,41 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 	return i, err
 }
 
+const createServer = `-- name: CreateServer :one
+insert into servers (id, name, host, ssh_key_ref, status)
+values (?, ?, ?, ?, ?)
+returning id, name, host, ssh_key_ref, status, created_at, updated_at
+`
+
+type CreateServerParams struct {
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Host      string         `json:"host"`
+	SshKeyRef sql.NullString `json:"ssh_key_ref"`
+	Status    string         `json:"status"`
+}
+
+func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (Server, error) {
+	row := q.queryRow(ctx, q.createServerStmt, createServer,
+		arg.ID,
+		arg.Name,
+		arg.Host,
+		arg.SshKeyRef,
+		arg.Status,
+	)
+	var i Server
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Host,
+		&i.SshKeyRef,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createService = `-- name: CreateService :one
 insert into services (
 	id,
@@ -808,6 +843,43 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 	return items, nil
 }
 
+const listServers = `-- name: ListServers :many
+select id, name, host, ssh_key_ref, status, created_at, updated_at
+from servers
+order by created_at asc, name asc
+`
+
+func (q *Queries) ListServers(ctx context.Context) ([]Server, error) {
+	rows, err := q.query(ctx, q.listServersStmt, listServers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Server
+	for rows.Next() {
+		var i Server
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Host,
+			&i.SshKeyRef,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServices = `-- name: ListServices :many
 select id, project_id, server_id, template_slug, name, status, generated_secrets, internal_port, exposed, hostname, created_at, updated_at
 from services
@@ -1113,6 +1185,33 @@ func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNamePa
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateServerStatus = `-- name: UpdateServerStatus :one
+update servers
+set status = ?, updated_at = current_timestamp
+where id = ?
+returning id, name, host, ssh_key_ref, status, created_at, updated_at
+`
+
+type UpdateServerStatusParams struct {
+	Status string `json:"status"`
+	ID     string `json:"id"`
+}
+
+func (q *Queries) UpdateServerStatus(ctx context.Context, arg UpdateServerStatusParams) (Server, error) {
+	row := q.queryRow(ctx, q.updateServerStatusStmt, updateServerStatus, arg.Status, arg.ID)
+	var i Server
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Host,
+		&i.SshKeyRef,
+		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

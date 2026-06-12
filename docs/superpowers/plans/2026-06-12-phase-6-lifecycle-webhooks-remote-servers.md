@@ -336,7 +336,7 @@ git commit -m "feat: add signed git webhooks"
 - Modify: `frontend/src/lib/api.ts`
 - Modify: `frontend/src/lib/types.ts`
 
-- [ ] **Step 1: Add store queries**
+- [x] **Step 1: Add store queries**
 
 Add:
 
@@ -358,7 +358,7 @@ where id = ?
 returning id, name, host, ssh_key_ref, status, created_at, updated_at;
 ```
 
-- [ ] **Step 2: Add SSH validation abstraction**
+- [x] **Step 2: Add SSH validation abstraction**
 
 Implement `remote.Validator`:
 
@@ -379,7 +379,7 @@ type Validator interface {
 
 Production validator uses `golang.org/x/crypto/ssh`, runs `uname -a` and `docker --version`, and returns a typed error when Docker is missing.
 
-- [ ] **Step 3: Add server API tests**
+- [x] **Step 3: Add server API tests**
 
 Test:
 
@@ -392,7 +392,7 @@ POST calls Validator.Check and stores status=healthy
 
 Add `servers:read` and `servers:write` to `AdminScopes`.
 
-- [ ] **Step 4: Implement server API and settings UI**
+- [x] **Step 4: Implement server API and settings UI**
 
 Add settings form fields:
 
@@ -405,7 +405,7 @@ private key
 
 Submit to `POST /servers`. Show servers list with status. Keep private key write-only and never echo it back.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 

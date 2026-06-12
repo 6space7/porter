@@ -71,6 +71,22 @@ export type Service = {
   hostname?: string
 }
 
+export type Server = {
+  id: string
+  name: string
+  host: string
+  status: string
+  docker_version?: string
+  os?: string
+}
+
+export type CreateServerInput = {
+  name: string
+  host: string
+  ssh_user: string
+  private_key: string
+}
+
 export type CreateServiceInput = {
   project_id: string
   template_slug: string

@@ -72,6 +72,10 @@ Verified on 2026-06-12:
 - app webhooks store an auto-deploy branch and HMAC secret, reject missing or
   invalid `X-Hub-Signature-256` headers, skip non-matching push branches, and
   deploy matching push events through the same deployment pipeline as the API.
+- the server registry lists the local server, accepts remote SSH connection
+  details through the Settings UI/API, validates `uname -a` and
+  `docker --version` over SSH, stores private keys by reference only, and never
+  returns private key material in API responses.
 
 Local browser checks also cover the embedded UI login/logout flow, apps
 dashboard, app creation form, app detail actions, domains, environment editor,
@@ -203,6 +207,21 @@ The response returns the webhook URL and a generated secret once. GitHub push
 events must send `X-Hub-Signature-256` as an HMAC-SHA256 over the raw request
 body. Pushes for other branches return `accepted=true` and `skipped=true`
 without deploying.
+
+## Server Registry
+
+Admins can list servers and add a remote server through `Settings -> Servers`
+or the API:
+
+```bash
+curl -sS -X POST -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"edge-1","host":"203.0.113.10","ssh_user":"root","private_key":"..."}' \
+  http://127.0.0.1:8080/api/v1/servers
+```
+
+The private key is write-only at the API boundary. Porter validates SSH access
+and Docker before saving the server as `healthy`.
 
 ## API Smoke Test
 

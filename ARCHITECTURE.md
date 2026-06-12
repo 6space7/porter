@@ -60,6 +60,11 @@ handler verifies `X-Hub-Signature-256` against the raw body, compares the push
 ref to the app's configured auto-deploy branch, and calls the same deployment
 service used by authenticated API deploys.
 
+The server registry stores server metadata in SQLite and validates remote hosts
+through `internal/remote.SSHValidator`. Private SSH keys are written to a
+managed key-store directory and referenced by `servers.ssh_key_ref`; list/create
+API responses omit the key reference and key material.
+
 Route reconciliation uses SQLite as the source of truth. Startup reconciles all
 verified domains, and app creation, custom-domain creation, and deploy-time
 port changes trigger another Caddy load through the admin API.

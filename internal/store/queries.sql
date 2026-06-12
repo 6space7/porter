@@ -8,6 +8,22 @@ select id, name, created_at, updated_at
 from projects
 order by created_at desc, name asc;
 
+-- name: CreateServer :one
+insert into servers (id, name, host, ssh_key_ref, status)
+values (?, ?, ?, ?, ?)
+returning id, name, host, ssh_key_ref, status, created_at, updated_at;
+
+-- name: ListServers :many
+select id, name, host, ssh_key_ref, status, created_at, updated_at
+from servers
+order by created_at asc, name asc;
+
+-- name: UpdateServerStatus :one
+update servers
+set status = ?, updated_at = current_timestamp
+where id = ?
+returning id, name, host, ssh_key_ref, status, created_at, updated_at;
+
 -- name: GetProject :one
 select id, name, created_at, updated_at
 from projects

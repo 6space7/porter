@@ -62,3 +62,6 @@ This log records product and engineering decisions that are not already fixed by
   providers can call them directly, but each enabled app stores its own generated
   HMAC secret. Porter verifies the raw request body before parsing JSON and
   skips branch mismatches without starting a deployment.
+- Remote server private keys are write-only in the API. The server registry
+  persists a key reference, not key material in JSON responses, and the runtime
+  stores key files under the data directory for future remote deployment work.
