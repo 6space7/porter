@@ -14,11 +14,12 @@ import (
 )
 
 type Options struct {
-	Resolver  proxy.Resolver
-	SecretBox *secretcrypto.SecretBox
-	Cloner    deploy.Cloner
-	Builder   deploy.Builder
-	Runner    deploy.Runner
+	Resolver   proxy.Resolver
+	SecretBox  *secretcrypto.SecretBox
+	Cloner     deploy.Cloner
+	Builder    deploy.Builder
+	Runner     deploy.Runner
+	CaddyAdmin proxy.CaddyAdmin
 }
 
 func NewHandler(ctx context.Context, cfg config.Config) (*store.DB, http.Handler, error) {
@@ -37,6 +38,17 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 	if err != nil {
 		_ = db.Close()
 		return nil, nil, err
+	}
+	if opts.CaddyAdmin != nil {
+		reconciler := proxy.Reconciler{
+			Source: proxy.NewStoreRouteSource(queries),
+			Admin:  opts.CaddyAdmin,
+			AskURL: cfg.CaddyAskURL,
+		}
+		if err := reconciler.Reconcile(ctx); err != nil {
+			_ = db.Close()
+			return nil, nil, err
+		}
 	}
 	pipeline := deploy.Pipeline{
 		Store:   deploy.NewStoreDeploymentStore(queries, nil),

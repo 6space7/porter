@@ -7,6 +7,7 @@ type Config struct {
 	DatabasePath  string
 	PublicIP      string
 	WorkspacePath string
+	CaddyAskURL   string
 }
 
 func Load() Config {
@@ -15,6 +16,7 @@ func Load() Config {
 		DatabasePath:  envOrDefault("PORTER_DATABASE_PATH", "porter.db"),
 		PublicIP:      os.Getenv("PORTER_PUBLIC_IP"),
 		WorkspacePath: envOrDefault("PORTER_WORKSPACE_PATH", "data/work"),
+		CaddyAskURL:   envOrDefault("PORTER_CADDY_ASK_URL", "http://127.0.0.1:8080/api/v1/caddy/ask"),
 	}
 }
 
