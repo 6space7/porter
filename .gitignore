@@ -32,6 +32,8 @@ var/
 # Build outputs
 porter
 porter.exe
+/server
+/server.exe
 *.tar.gz
 *.zip
 
