@@ -30,9 +30,9 @@ one-click rollback/image retention, source install, secure secret handling, and
 an embedded Svelte web UI for the core one-server workflows. It also supports
 Dockerfile-less Nixpacks builds, service catalog templates, internal service
 attachment, public HTTPS service routes, an authenticated MCP HTTP endpoint,
-machine-readable agent docs, and dashboard onboarding for AI agents. Remaining
-work in Phase 5 is VPS verification; later phases add multi-server deploys,
-GitHub auto-deploy, and release lifecycle automation.
+machine-readable agent docs, and dashboard onboarding for AI agents. Phases 0
+through 5 are verified; later phases add multi-server deploys, GitHub
+auto-deploy, and release lifecycle automation.
 
 Verified on 2026-06-12:
 
@@ -67,6 +67,8 @@ Verified on 2026-06-12:
   service catalog operations, service attach, and latest-deployment diagnosis.
 - `/llms.txt` and `/api/v1/docs` expose concise machine-readable agent
   onboarding docs, including auth, endpoint, tool, scope, and example payloads.
+- the public HTTPS MCP endpoint initializes successfully and can call
+  `porter_list_projects` through the generated platform domain.
 
 Local browser checks also cover the embedded UI login/logout flow, apps
 dashboard, app creation form, app detail actions, domains, environment editor,

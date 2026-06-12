@@ -291,7 +291,7 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 2: VPS verification**
+- [x] **Step 2: VPS verification**
 
 On the test VPS:
 
@@ -304,7 +304,7 @@ call MCP deploy service with a token missing services:write and confirm forbidde
 open Settings and confirm onboarding snippet renders
 ```
 
-- [ ] **Step 3: Commit and push**
+- [x] **Step 3: Commit and push**
 
 Use small conventional commits during implementation and a final docs commit:
 

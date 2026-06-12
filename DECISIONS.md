@@ -53,3 +53,7 @@ This log records product and engineering decisions that are not already fixed by
 - Deployment failures caused by request cancellation are still persisted as
   failed deployment records so history does not get stuck at `running` with no
   image tag.
+- The MCP endpoint uses streamable HTTP under `/api/v1/mcp` and is protected by
+  the existing bearer-token middleware. Tool handlers call the same API service
+  interfaces as the dashboard, while `/llms.txt` and `/api/v1/docs` stay public
+  because they contain endpoint and scope metadata but no secrets.

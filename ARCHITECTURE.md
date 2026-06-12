@@ -2,8 +2,8 @@
 
 porter is a single Go binary. It serves the JSON API, runs SQLite migrations,
 talks to Docker, manages Caddy, exposes deployment logs, and serves the
-embedded Svelte web UI. Later phases add the MCP server and broader deployment
-automation.
+embedded Svelte web UI, machine-readable agent docs, and an authenticated MCP
+HTTP server. Later phases add broader deployment automation.
 
 ## Fixed Stack
 
@@ -24,9 +24,11 @@ The codebase uses domain-based packages:
 - `internal/config`
 - `internal/crypto`
 - `internal/deploy`
+- `internal/docs`
 - `internal/docker`
 - `internal/frontend`
 - `internal/install`
+- `internal/mcp`
 - `internal/proxy`
 - `internal/runtime`
 - `internal/store`
@@ -36,6 +38,12 @@ The codebase uses domain-based packages:
 
 All product behavior must be reachable through `/api/v1/...`; the web UI,
 future CLI, and MCP server are clients of that API.
+
+The MCP server is mounted at `/api/v1/mcp` behind the same bearer-token
+middleware as the JSON API. Tool handlers reuse the API service interfaces for
+projects, apps, deployments, logs, env vars, services, rollback, and diagnosis.
+`/llms.txt` and `/api/v1/docs` are public machine-readable docs that describe
+auth, endpoints, tools, scopes, and example MCP payloads.
 
 The UI is built in `frontend/` with Svelte 5, Vite, and TypeScript. `frontend/embed.go`
 embeds `frontend/dist`, and `internal/frontend` serves static assets with an SPA
