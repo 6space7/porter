@@ -64,8 +64,15 @@ func TestCaddyAdminClientAppliesConfigToAdminAPI(t *testing.T) {
 	tlsApp := apps["tls"].(map[string]any)
 	automation := tlsApp["automation"].(map[string]any)
 	onDemand := automation["on_demand"].(map[string]any)
-	if onDemand["ask"] != "http://127.0.0.1:8080/api/v1/caddy/ask" {
-		t.Fatalf("on demand ask = %#v", onDemand)
+	permission, ok := onDemand["permission"].(map[string]any)
+	if !ok {
+		t.Fatalf("on demand permission missing: %#v", onDemand)
+	}
+	if permission["module"] != "http" || permission["endpoint"] != "http://127.0.0.1:8080/api/v1/caddy/ask" {
+		t.Fatalf("on demand permission = %#v", permission)
+	}
+	if _, ok := onDemand["ask"]; ok {
+		t.Fatalf("legacy on demand ask should not be emitted: %#v", onDemand)
 	}
 }
 

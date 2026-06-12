@@ -84,7 +84,10 @@ func toCaddyAdminConfig(config CaddyConfig) map[string]any {
 			"tls": map[string]any{
 				"automation": map[string]any{
 					"on_demand": map[string]any{
-						"ask": config.HTTP.AskURL,
+						"permission": map[string]any{
+							"module":   "http",
+							"endpoint": config.HTTP.AskURL,
+						},
 					},
 					"policies": []any{
 						map[string]any{"on_demand": true},
