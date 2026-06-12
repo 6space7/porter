@@ -53,15 +53,43 @@ func TestLoginRouteRejectsBadCredentials(t *testing.T) {
 	}
 }
 
+func TestLogoutRouteRevokesCurrentToken(t *testing.T) {
+	auth := &fakeAuthService{}
+	router := api.NewRouterWithDeps(api.Dependencies{
+		Auth:          auth,
+		TokenVerifier: deployTestVerifier(),
+	})
+
+	assertStatusAndCode(t, router, http.MethodDelete, "/api/v1/auth/session", "", http.StatusUnauthorized, "unauthorized")
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/session", nil)
+	req.Header.Set("Authorization", "Bearer read-token")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusNoContent, rr.Body.String())
+	}
+	if auth.logoutTokenID != "tok_read" {
+		t.Fatalf("logout token id = %q", auth.logoutTokenID)
+	}
+}
+
 type fakeAuthService struct {
-	email    string
-	password string
-	response api.LoginResponse
-	err      error
+	email         string
+	password      string
+	logoutTokenID string
+	response      api.LoginResponse
+	err           error
 }
 
 func (service *fakeAuthService) Login(_ context.Context, email, password string) (api.LoginResponse, error) {
 	service.email = email
 	service.password = password
 	return service.response, service.err
+}
+
+func (service *fakeAuthService) Logout(_ context.Context, tokenID string) error {
+	service.logoutTokenID = tokenID
+	return service.err
 }

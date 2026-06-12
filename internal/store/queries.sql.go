@@ -263,6 +263,16 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) error {
 	return err
 }
 
+const deleteToken = `-- name: DeleteToken :exec
+delete from tokens
+where id = ?
+`
+
+func (q *Queries) DeleteToken(ctx context.Context, id string) error {
+	_, err := q.exec(ctx, q.deleteTokenStmt, deleteToken, id)
+	return err
+}
+
 const getApp = `-- name: GetApp :one
 select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
 from apps

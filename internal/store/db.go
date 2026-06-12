@@ -54,6 +54,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteProjectStmt, err = db.PrepareContext(ctx, deleteProject); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteProject: %w", err)
 	}
+	if q.deleteTokenStmt, err = db.PrepareContext(ctx, deleteToken); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteToken: %w", err)
+	}
 	if q.getAppStmt, err = db.PrepareContext(ctx, getApp); err != nil {
 		return nil, fmt.Errorf("error preparing query GetApp: %w", err)
 	}
@@ -155,6 +158,11 @@ func (q *Queries) Close() error {
 	if q.deleteProjectStmt != nil {
 		if cerr := q.deleteProjectStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteProjectStmt: %w", cerr)
+		}
+	}
+	if q.deleteTokenStmt != nil {
+		if cerr := q.deleteTokenStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteTokenStmt: %w", cerr)
 		}
 	}
 	if q.getAppStmt != nil {
@@ -286,6 +294,7 @@ type Queries struct {
 	deleteDomainStmt            *sql.Stmt
 	deleteEnvVarStmt            *sql.Stmt
 	deleteProjectStmt           *sql.Stmt
+	deleteTokenStmt             *sql.Stmt
 	getAppStmt                  *sql.Stmt
 	getDeploymentStmt           *sql.Stmt
 	getDomainByHostnameStmt     *sql.Stmt
@@ -318,6 +327,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteDomainStmt:            q.deleteDomainStmt,
 		deleteEnvVarStmt:            q.deleteEnvVarStmt,
 		deleteProjectStmt:           q.deleteProjectStmt,
+		deleteTokenStmt:             q.deleteTokenStmt,
 		getAppStmt:                  q.getAppStmt,
 		getDeploymentStmt:           q.getDeploymentStmt,
 		getDomainByHostnameStmt:     q.getDomainByHostnameStmt,

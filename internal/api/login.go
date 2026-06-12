@@ -17,6 +17,7 @@ var ErrInvalidLogin = errors.New("invalid login")
 
 type AuthService interface {
 	Login(ctx context.Context, email, password string) (LoginResponse, error)
+	Logout(ctx context.Context, tokenID string) error
 }
 
 type LoginResponse struct {
@@ -37,6 +38,11 @@ type authHandler struct {
 func mountAuthRoutes(router chi.Router, auth AuthService) {
 	handler := authHandler{auth: auth}
 	router.Post("/auth/login", handler.login)
+}
+
+func mountAuthSessionRoutes(router chi.Router, auth AuthService) {
+	handler := authHandler{auth: auth}
+	router.Delete("/auth/session", handler.logout)
 }
 
 func (handler authHandler) login(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +67,19 @@ func (handler authHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (handler authHandler) logout(w http.ResponseWriter, r *http.Request) {
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok || strings.TrimSpace(principal.TokenID) == "" {
+		WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentication is required.", "Send a bearer token in the Authorization header.", nil)
+		return
+	}
+	if err := handler.auth.Logout(r.Context(), principal.TokenID); err != nil {
+		WriteError(w, http.StatusInternalServerError, "internal_error", "Logout could not be completed.", "Try again or check server logs.", nil)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type storeAuthService struct {
@@ -101,6 +120,10 @@ func (service storeAuthService) Login(ctx context.Context, email, password strin
 		TokenID: record.ID,
 		Scopes:  record.Scopes,
 	}, nil
+}
+
+func (service storeAuthService) Logout(ctx context.Context, tokenID string) error {
+	return service.queries.DeleteToken(ctx, tokenID)
 }
 
 func AdminScopes() []string {

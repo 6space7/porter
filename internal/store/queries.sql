@@ -134,6 +134,10 @@ select id, name, hash, scopes, created_at, last_used_at
 from tokens
 where hash = ?;
 
+-- name: DeleteToken :exec
+delete from tokens
+where id = ?;
+
 -- name: CreateUser :one
 insert into users (id, email, password_hash)
 values (?, ?, ?)

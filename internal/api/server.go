@@ -36,6 +36,9 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 		if deps.TokenVerifier != nil {
 			r.Group(func(protected chi.Router) {
 				protected.Use(RequireBearerToken(deps.TokenVerifier))
+				if deps.Auth != nil {
+					mountAuthSessionRoutes(protected, deps.Auth)
+				}
 				if deps.Projects != nil {
 					mountProjectRoutes(protected, deps.Projects)
 				}

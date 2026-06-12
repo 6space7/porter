@@ -84,6 +84,34 @@ func TestStoreAuthServiceRejectsInvalidPassword(t *testing.T) {
 	}
 }
 
+func TestStoreAuthServiceLogoutDeletesToken(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, store.Config{Path: filepath.Join(t.TempDir(), "porter.db")})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	queries := store.New(db.SQL())
+	_, err = queries.CreateToken(ctx, store.CreateTokenParams{
+		ID:     "tok_1",
+		Name:   "agent",
+		Hash:   auth.HashToken("ptr_1"),
+		Scopes: "apps:read",
+	})
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	service := api.NewStoreAuthService(queries)
+	if err := service.Logout(ctx, "tok_1"); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+	if _, err := queries.GetTokenByHash(ctx, auth.HashToken("ptr_1")); err == nil {
+		t.Fatal("expected token to be deleted")
+	}
+}
+
 func hasScope(scopes []string, want string) bool {
 	for _, scope := range scopes {
 		if scope == want {
