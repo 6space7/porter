@@ -103,6 +103,45 @@ func TestPipelineFailureRecordsFailedStageAndRedactedLog(t *testing.T) {
 	}
 }
 
+func TestPipelineFailureRecordsFailedStageAfterContextCancellation(t *testing.T) {
+	store := &fakeDeploymentStore{respectCancellation: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	pipeline := deploy.Pipeline{
+		Store: store,
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source", Log: "cloned\n"}, nil
+		}),
+		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
+			cancel()
+			return deploy.BuildResult{Log: "builder canceled\n"}, context.Canceled
+		}),
+		Runner: deploy.RunnerFunc(func(context.Context, deploy.RunRequest) (string, error) {
+			t.Fatal("runner should not be called after build cancellation")
+			return "", nil
+		}),
+	}
+
+	result, err := pipeline.Run(ctx, deploy.Request{
+		AppID:  "app_1",
+		GitURL: "https://github.com/example/web.git",
+		Branch: "main",
+	})
+	if err == nil {
+		t.Fatal("expected pipeline error")
+	}
+	if result.Status != deploy.StatusFailed || result.Stage != deploy.StageBuilding {
+		t.Fatalf("result = %#v", result)
+	}
+
+	last := store.records[len(store.records)-1]
+	if last.Status != deploy.StatusFailed || last.Stage != deploy.StageBuilding {
+		t.Fatalf("last record = %#v", last)
+	}
+	if !strings.Contains(last.BuildLog, "context canceled") {
+		t.Fatalf("build log = %q", last.BuildLog)
+	}
+}
+
 func TestPipelinePassesEnvAndInternalPortToRunner(t *testing.T) {
 	store := &fakeDeploymentStore{}
 	pipeline := deploy.Pipeline{
@@ -249,7 +288,8 @@ func TestPipelineRollbackRunsExistingImageAndRecordsStages(t *testing.T) {
 }
 
 type fakeDeploymentStore struct {
-	records []deploy.DeploymentRecord
+	records             []deploy.DeploymentRecord
+	respectCancellation bool
 }
 
 func (store *fakeDeploymentStore) CreateDeployment(_ context.Context, appID string) (deploy.DeploymentRecord, error) {
@@ -263,7 +303,10 @@ func (store *fakeDeploymentStore) CreateDeployment(_ context.Context, appID stri
 	return record, nil
 }
 
-func (store *fakeDeploymentStore) UpdateDeployment(_ context.Context, record deploy.DeploymentRecord) error {
+func (store *fakeDeploymentStore) UpdateDeployment(ctx context.Context, record deploy.DeploymentRecord) error {
+	if store.respectCancellation && ctx.Err() != nil {
+		return ctx.Err()
+	}
 	store.records = append(store.records, record)
 	return nil
 }

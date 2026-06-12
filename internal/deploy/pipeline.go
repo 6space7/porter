@@ -254,7 +254,7 @@ func (pipeline Pipeline) fail(ctx context.Context, record DeploymentRecord, stag
 	record.Status = StatusFailed
 	record.Stage = stage
 	record.BuildLog = RedactSecrets(log+fmt.Sprintf("error: %v\n", cause), secrets)
-	if err := pipeline.Store.UpdateDeployment(ctx, record); err != nil {
+	if err := pipeline.Store.UpdateDeployment(context.WithoutCancel(ctx), record); err != nil {
 		return record, err
 	}
 	return record, cause
