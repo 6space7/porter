@@ -117,28 +117,55 @@ Core tools include `porter_list_projects`, `porter_create_app`,
 `porter_search_service_templates`, `porter_deploy_service`,
 `porter_attach_service`, and `porter_diagnose_latest_deployment`.
 
-## Source Install
+## Install
 
-Run from a checked-out repository on a Debian or Ubuntu amd64/arm64 server:
+Run on a Debian or Ubuntu amd64/arm64 server:
 
 ```bash
-sudo ./install.sh
+curl -fsSL https://raw.githubusercontent.com/6space7/porter/main/install.sh | sudo bash
+```
+
+By default, the installer downloads the latest release archive for the host
+architecture and installs `/usr/local/bin/porter`. To install from a checked-out
+repository during development, use source mode:
+
+```bash
+PORTER_INSTALL_FROM_SOURCE=1 sudo ./install.sh
 ```
 
 The installer:
 
 - installs Docker if it is missing;
-- installs Go 1.25 or newer from the official Go distribution when needed;
+- installs Go 1.25 or newer from the official Go distribution only in source mode;
 - installs Nixpacks when it is missing;
 - writes config under `/etc/porter`;
 - writes runtime data under `/var/lib/porter`;
 - creates `/etc/porter/master.key` with `0600` permissions;
-- builds `/usr/local/bin/porter` from source;
+- installs `/usr/local/bin/porter` from the latest release or source mode build;
 - creates and starts `porter.service`;
 - prints the HTTPS sslip.io dashboard/API URL when the public IP is detected;
 - prints an initial admin password and stores it once at `/etc/porter/initial-password`.
 
 Save the initial password, then remove `/etc/porter/initial-password`.
+
+To pin a release or fork:
+
+```bash
+PORTER_VERSION=vX.Y.Z sudo ./install.sh
+PORTER_REPO=owner/repo sudo ./install.sh
+```
+
+To remove porter but keep app data:
+
+```bash
+sudo ./uninstall.sh
+```
+
+To remove the service, binary, config, and SQLite/runtime data:
+
+```bash
+sudo ./uninstall.sh --purge
+```
 
 ## Lifecycle Commands
 
@@ -156,8 +183,7 @@ sudo porter update \
 ```
 
 `backup` writes a timestamped SQLite snapshot. `update` currently creates the
-same backup and prints the release archive URL that the release installer path
-will use.
+same backup and prints the release archive URL used by release installs.
 
 ## API Smoke Test
 

@@ -10,6 +10,9 @@ PORTER_INITIAL_PASSWORD="${PORTER_CONFIG_DIR}/initial-password"
 PORTER_BINARY="/usr/local/bin/porter"
 PORTER_SERVICE="/etc/systemd/system/porter.service"
 PORTER_ADMIN_EMAIL="${PORTER_ADMIN_EMAIL:-admin@porter.local}"
+PORTER_REPO="${PORTER_REPO:-6space7/porter}"
+PORTER_VERSION="${PORTER_VERSION:-latest}"
+PORTER_INSTALL_FROM_SOURCE="${PORTER_INSTALL_FROM_SOURCE:-0}"
 
 require_root() {
 	if [[ "${EUID}" -ne 0 ]]; then
@@ -29,7 +32,7 @@ require_supported_platform() {
 	local distro="${ID:-}"
 	local like="${ID_LIKE:-}"
 	if [[ "${distro}" != "ubuntu" && "${distro}" != "debian" && "${like}" != *"debian"* ]]; then
-		echo "unsupported OS: porter Phase 1 installer supports Debian or Ubuntu" >&2
+		echo "unsupported OS: porter installer supports Debian or Ubuntu" >&2
 		exit 1
 	fi
 
@@ -48,6 +51,17 @@ require_supported_platform() {
 install_base_packages() {
 	apt-get update
 	apt-get install -y ca-certificates curl git openssl tar
+}
+
+source_install_enabled() {
+	case "${PORTER_INSTALL_FROM_SOURCE}" in
+		1|true|TRUE|yes|YES|y|Y)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
 }
 
 install_docker_if_missing() {
@@ -84,6 +98,10 @@ go_version_ok() {
 }
 
 go_arch() {
+	release_arch
+}
+
+release_arch() {
 	case "$(uname -m)" in
 		x86_64|amd64)
 			printf 'amd64'
@@ -96,6 +114,17 @@ go_arch() {
 			exit 1
 			;;
 	esac
+}
+
+release_archive_url() {
+	local arch path
+	arch="$(release_arch)"
+	if [[ "${PORTER_VERSION}" == "latest" ]]; then
+		path="releases/latest/download"
+	else
+		path="releases/download/${PORTER_VERSION}"
+	fi
+	printf 'https://github.com/%s/%s/porter-linux-%s.tar.gz' "${PORTER_REPO}" "${path}" "${arch}"
 }
 
 install_go_if_missing() {
@@ -212,6 +241,41 @@ build_binary() {
 	(cd "${script_dir}" && go build -o "${PORTER_BINARY}" ./cmd/server)
 }
 
+download_release_binary() {
+	local archive tmp url
+	tmp="$(mktemp -d)"
+	archive="${tmp}/porter.tar.gz"
+	url="$(release_archive_url)"
+
+	echo "Downloading porter release: ${url}"
+	if ! curl -fsSL "${url}" -o "${archive}"; then
+		rm -rf "${tmp}"
+		echo "failed to download porter release archive" >&2
+		echo "for source checkouts before a release exists, run: PORTER_INSTALL_FROM_SOURCE=1 sudo ./install.sh" >&2
+		exit 1
+	fi
+
+	tar -xzf "${archive}" -C "${tmp}"
+	if [[ ! -f "${tmp}/porter" ]]; then
+		rm -rf "${tmp}"
+		echo "release archive did not contain a porter binary" >&2
+		exit 1
+	fi
+
+	install -m 0755 "${tmp}/porter" "${PORTER_BINARY}"
+	rm -rf "${tmp}"
+}
+
+install_binary() {
+	if source_install_enabled; then
+		install_go_if_missing
+		build_binary
+		return
+	fi
+
+	download_release_binary
+}
+
 write_systemd_unit() {
 	cat > "${PORTER_SERVICE}" <<EOF
 [Unit]
@@ -273,12 +337,11 @@ main() {
 	install_base_packages
 	install_docker_if_missing
 	ensure_docker_running
-	install_go_if_missing
 	install_nixpacks_if_missing
 	ensure_directories
 	ensure_master_key
 	write_env_file
-	build_binary
+	install_binary
 	write_systemd_unit
 	start_service
 	print_summary

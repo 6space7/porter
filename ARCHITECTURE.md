@@ -87,9 +87,10 @@ used for config generation: verified app domains, the platform domain, and
 exposed service hostnames. Internal service hostnames are not authorized for
 public TLS.
 
-Production source installs use:
+Production installs use release archives by default and source builds only when
+`PORTER_INSTALL_FROM_SOURCE=1` is set. Installed systems use:
 
 - `/etc/porter` for config and the master key;
 - `/var/lib/porter` for the SQLite database and workspaces;
-- `/usr/local/bin/porter` for the built binary;
+- `/usr/local/bin/porter` for the release or source-built binary;
 - `porter.service` for systemd supervision.

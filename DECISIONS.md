@@ -22,9 +22,10 @@ This log records product and engineering decisions that are not already fixed by
 - Docker image builds inspect the JSON build stream for embedded `error`
   events; the Docker SDK can return a successful API response while the build
   itself failed.
-- Until release binaries exist, the installer builds from source and installs a
-  supported Go toolchain from the official Go distribution when the host has no
-  suitable Go version.
+- Phase 6 installers default to downloading GitHub release archives, while
+  `PORTER_INSTALL_FROM_SOURCE=1` keeps the source-build path for development
+  and for bootstrapping before the first tagged release exists. Go is installed
+  only for that explicit source-build path.
 - Caddy full-config updates use `POST /load`, not `PUT /config`, and the admin
   load call retries briefly because the managed Caddy container can accept a TCP
   connection before the admin API is ready.

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestInstallerInstallsGoBeforeBuildingFromSource(t *testing.T) {
+func TestInstallerDownloadsReleaseByDefault(t *testing.T) {
 	scriptPath := filepath.Join("..", "..", "install.sh")
 	raw, err := os.ReadFile(scriptPath)
 	if err != nil {
@@ -15,6 +15,28 @@ func TestInstallerInstallsGoBeforeBuildingFromSource(t *testing.T) {
 	}
 	script := string(raw)
 
+	if !strings.Contains(script, "PORTER_REPO=\"${PORTER_REPO:-6space7/porter}\"") {
+		t.Fatal("installer must default to the porter GitHub repo")
+	}
+	if !strings.Contains(script, "releases/latest/download") {
+		t.Fatal("installer must download the latest release by default")
+	}
+	if !strings.Contains(script, "download_release_binary") {
+		t.Fatal("installer must install release binaries")
+	}
+}
+
+func TestInstallerKeepsExplicitSourceBuildMode(t *testing.T) {
+	scriptPath := filepath.Join("..", "..", "install.sh")
+	raw, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read install script: %v", err)
+	}
+	script := string(raw)
+
+	if !strings.Contains(script, "PORTER_INSTALL_FROM_SOURCE") {
+		t.Fatal("installer must expose explicit source-build mode")
+	}
 	installGo := strings.Index(script, "install_go_if_missing")
 	buildBinary := strings.Index(script, "build_binary")
 	if installGo == -1 {

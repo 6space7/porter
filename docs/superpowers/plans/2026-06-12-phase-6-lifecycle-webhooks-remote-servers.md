@@ -152,7 +152,7 @@ git commit -m "feat: add lifecycle backup planning"
 - Modify: `README.md`
 - Modify: `DECISIONS.md`
 
-- [ ] **Step 1: Add installer shell tests**
+- [x] **Step 1: Add installer shell tests**
 
 Add shell syntax checks to local verification commands:
 
@@ -163,7 +163,7 @@ bash -n uninstall.sh
 
 Expected: `uninstall.sh` missing until implemented.
 
-- [ ] **Step 2: Add release workflow**
+- [x] **Step 2: Add release workflow**
 
 Create `.github/workflows/release.yml` that runs on tags `v*`, builds:
 
@@ -174,7 +174,7 @@ linux/arm64 -> porter-linux-arm64.tar.gz
 
 Each archive must contain `porter`, `install.sh`, `uninstall.sh`, `README.md`, `ARCHITECTURE.md`, and `DECISIONS.md`. Use `actions/setup-go`, `actions/setup-node`, `npm ci`, `npm run build`, and `go build`.
 
-- [ ] **Step 3: Upgrade installer release download path**
+- [x] **Step 3: Upgrade installer release download path**
 
 Modify `install.sh` so default install downloads:
 
@@ -190,7 +190,7 @@ PORTER_INSTALL_FROM_SOURCE=1 sudo ./install.sh
 
 Keep Go install only for source mode. Keep Nixpacks, Docker, env, systemd, and one-time password behavior unchanged.
 
-- [ ] **Step 4: Add uninstall script**
+- [x] **Step 4: Add uninstall script**
 
 Create `uninstall.sh` with:
 
@@ -202,7 +202,7 @@ never removes user app/service containers unless --purge is provided
 
 Use root checks and explicit path variables.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
