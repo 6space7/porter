@@ -45,6 +45,24 @@ func TestSDKBackendBuildImageSendsTaggedDockerBuild(t *testing.T) {
 	}
 }
 
+func TestSDKBackendBuildImageReturnsStreamedBuildError(t *testing.T) {
+	client := &fakeDockerClient{
+		buildResponse: build.ImageBuildResponse{Body: io.NopCloser(strings.NewReader(`{"stream":"Step 1/1\n"}` + "\n" + `{"error":"dockerfile failed","errorDetail":{"message":"dockerfile failed"}}`))},
+	}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	log, err := backend.BuildImage(context.Background(), t.TempDir(), "porter/app_1:dep_1")
+	if err == nil {
+		t.Fatal("expected streamed build error")
+	}
+	if !strings.Contains(err.Error(), "dockerfile failed") {
+		t.Fatalf("error = %v", err)
+	}
+	if !strings.Contains(log, "dockerfile failed") {
+		t.Fatalf("log = %q", log)
+	}
+}
+
 func TestSDKBackendReplaceContainerUsesSafeOptions(t *testing.T) {
 	client := &fakeDockerClient{createID: "container_1"}
 	backend := dockerstage.NewSDKBackendWithClient(client)

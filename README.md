@@ -44,6 +44,7 @@ The installer:
 - creates `/etc/porter/master.key` with `0600` permissions;
 - builds `/usr/local/bin/porter` from source;
 - creates and starts `porter.service`;
+- prints the HTTPS sslip.io dashboard/API URL when the public IP is detected;
 - prints an initial admin password and stores it once at `/etc/porter/initial-password`.
 
 Save the initial password, then remove `/etc/porter/initial-password`.
@@ -80,10 +81,10 @@ APP_ID="$(
     -d "{
       \"project_id\":\"${PROJECT_ID}\",
       \"name\":\"web\",
-      \"git_url\":\"https://github.com/dockersamples/helloworld-demo-node.git\",
-      \"branch\":\"main\",
+      \"git_url\":\"https://github.com/chandu-muthyala/Dockerizing-a-NodeJS-web-app.git\",
+      \"branch\":\"master\",
       \"build_type\":\"dockerfile\",
-      \"internal_port\":8080
+      \"internal_port\":3000
     }" \
     http://127.0.0.1:8080/api/v1/apps |
     python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])'

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -68,7 +69,11 @@ func (backend *SDKBackend) BuildImage(ctx context.Context, sourceDir, imageTag s
 	if err != nil {
 		return "", fmt.Errorf("read docker build output: %w", err)
 	}
-	return string(body), nil
+	log := string(body)
+	if err := streamedBuildError(log); err != nil {
+		return log, err
+	}
+	return log, nil
 }
 
 func (backend *SDKBackend) EnsureNetwork(ctx context.Context, name string) error {
@@ -203,4 +208,29 @@ func tarDirectory(root string) (io.Reader, error) {
 		return nil, err
 	}
 	return bytes.NewReader(buf.Bytes()), nil
+}
+
+func streamedBuildError(log string) error {
+	decoder := json.NewDecoder(strings.NewReader(log))
+	for {
+		var event struct {
+			Error       string `json:"error"`
+			ErrorDetail struct {
+				Message string `json:"message"`
+			} `json:"errorDetail"`
+		}
+		if err := decoder.Decode(&event); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return nil
+		}
+		message := strings.TrimSpace(event.ErrorDetail.Message)
+		if message == "" {
+			message = strings.TrimSpace(event.Error)
+		}
+		if message != "" {
+			return fmt.Errorf("docker build failed: %s", message)
+		}
+	}
 }

@@ -16,3 +16,9 @@ This log records product and engineering decisions that are not already fixed by
 - Managed Caddy is enabled by default for installed servers and can be disabled
   with `PORTER_MANAGE_CADDY=false` for local development or external proxy
   setups.
+- Managed Caddy runs in Docker, so its on-demand TLS `ask` URL and porter
+  platform route use `host.docker.internal:8080` with Docker's
+  `host-gateway` mapping instead of `127.0.0.1`.
+- Docker image builds inspect the JSON build stream for embedded `error`
+  events; the Docker SDK can return a successful API response while the build
+  itself failed.
