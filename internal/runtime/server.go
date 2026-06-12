@@ -159,6 +159,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		TokenVerifier: tokenVerifier,
 		Projects:      projectService,
 		Apps:          appService,
+		Webhooks:      appService,
 		Domains:       domainService,
 		EnvVars:       envVars,
 		Deployments:   deploymentService,

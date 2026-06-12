@@ -19,6 +19,7 @@ type Dependencies struct {
 	Logs                LogService
 	CaddyAsk            CaddyAskService
 	Services            ServiceManager
+	Webhooks            AppWebhookService
 	MCP                 http.Handler
 }
 
@@ -34,6 +35,15 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
+		webhooks := deps.Webhooks
+		if webhooks == nil && deps.Apps != nil {
+			if appWebhooks, ok := deps.Apps.(AppWebhookService); ok {
+				webhooks = appWebhooks
+			}
+		}
+		if webhooks != nil && deps.Deployments != nil {
+			mountWebhookRoutes(r, webhooks, deps.Deployments)
+		}
 		if deps.Auth != nil {
 			loginLimiter := deps.LoginFailureLimiter
 			if loginLimiter == nil {
@@ -56,7 +66,7 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 					mountProjectRoutes(protected, deps.Projects)
 				}
 				if deps.Apps != nil {
-					mountAppRoutes(protected, deps.Apps)
+					mountAppRoutes(protected, deps.Apps, webhooks)
 				}
 				if deps.Domains != nil {
 					mountDomainRoutes(protected, deps.Domains)

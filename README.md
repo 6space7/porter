@@ -69,6 +69,9 @@ Verified on 2026-06-12:
   onboarding docs, including auth, endpoint, tool, scope, and example payloads.
 - the public HTTPS MCP endpoint initializes successfully and can call
   `porter_list_projects` through the generated platform domain.
+- app webhooks store an auto-deploy branch and HMAC secret, reject missing or
+  invalid `X-Hub-Signature-256` headers, skip non-matching push branches, and
+  deploy matching push events through the same deployment pipeline as the API.
 
 Local browser checks also cover the embedded UI login/logout flow, apps
 dashboard, app creation form, app detail actions, domains, environment editor,
@@ -184,6 +187,22 @@ sudo porter update \
 
 `backup` writes a timestamped SQLite snapshot. `update` currently creates the
 same backup and prints the release archive URL used by release installs.
+
+## Push Webhooks
+
+Enable an app webhook from the dashboard app detail panel, or through the API:
+
+```bash
+curl -sS -X PUT -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":true,"branch":"main"}' \
+  http://127.0.0.1:8080/api/v1/apps/${APP_ID}/webhook
+```
+
+The response returns the webhook URL and a generated secret once. GitHub push
+events must send `X-Hub-Signature-256` as an HMAC-SHA256 over the raw request
+body. Pushes for other branches return `accepted=true` and `skipped=true`
+without deploying.
 
 ## API Smoke Test
 

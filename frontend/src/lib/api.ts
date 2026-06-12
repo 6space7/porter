@@ -15,6 +15,8 @@ import type {
   Service,
   ServiceTemplate,
   UpdateAppInput,
+  UpdateWebhookInput,
+  WebhookSettings,
 } from './types'
 
 type RequestBody = Record<string, unknown> | undefined
@@ -78,6 +80,10 @@ export class PorterApi {
 
   async updateApp(id: string, input: UpdateAppInput) {
     return this.request<App>('PATCH', `/apps/${id}`, input as unknown as RequestBody)
+  }
+
+  async updateAppWebhook(id: string, input: UpdateWebhookInput) {
+    return this.request<WebhookSettings>('PUT', `/apps/${id}/webhook`, input as unknown as RequestBody)
   }
 
   async deleteApp(id: string) {

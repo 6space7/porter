@@ -34,7 +34,7 @@ insert into apps (
 	status
 )
 values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 `
 
 type CreateAppParams struct {
@@ -74,6 +74,8 @@ func (q *Queries) CreateApp(ctx context.Context, arg CreateAppParams) (App, erro
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AutoDeployBranch,
+		&i.WebhookSecret,
 	)
 	return i, err
 }
@@ -361,7 +363,7 @@ func (q *Queries) DeleteToken(ctx context.Context, id string) error {
 }
 
 const getApp = `-- name: GetApp :one
-select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 from apps
 where id = ?
 `
@@ -381,6 +383,35 @@ func (q *Queries) GetApp(ctx context.Context, id string) (App, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AutoDeployBranch,
+		&i.WebhookSecret,
+	)
+	return i, err
+}
+
+const getAppByWebhookID = `-- name: GetAppByWebhookID :one
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
+from apps
+where id = ?
+`
+
+func (q *Queries) GetAppByWebhookID(ctx context.Context, id string) (App, error) {
+	row := q.queryRow(ctx, q.getAppByWebhookIDStmt, getAppByWebhookID, id)
+	var i App
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ServerID,
+		&i.Name,
+		&i.GitUrl,
+		&i.Branch,
+		&i.BuildType,
+		&i.InternalPort,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AutoDeployBranch,
+		&i.WebhookSecret,
 	)
 	return i, err
 }
@@ -545,7 +576,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const listApps = `-- name: ListApps :many
-select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 from apps
 order by created_at desc, name asc
 `
@@ -571,6 +602,8 @@ func (q *Queries) ListApps(ctx context.Context) ([]App, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AutoDeployBranch,
+			&i.WebhookSecret,
 		); err != nil {
 			return nil, err
 		}
@@ -586,7 +619,7 @@ func (q *Queries) ListApps(ctx context.Context) ([]App, error) {
 }
 
 const listAppsByProject = `-- name: ListAppsByProject :many
-select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 from apps
 where project_id = ?
 order by created_at desc, name asc
@@ -613,6 +646,8 @@ func (q *Queries) ListAppsByProject(ctx context.Context, projectID string) ([]Ap
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AutoDeployBranch,
+			&i.WebhookSecret,
 		); err != nil {
 			return nil, err
 		}
@@ -887,7 +922,7 @@ set
 	internal_port = ?,
 	updated_at = current_timestamp
 where id = ?
-returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 `
 
 type UpdateAppParams struct {
@@ -921,6 +956,8 @@ func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, erro
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AutoDeployBranch,
+		&i.WebhookSecret,
 	)
 	return i, err
 }
@@ -971,6 +1008,40 @@ type UpdateAppStatusParams struct {
 func (q *Queries) UpdateAppStatus(ctx context.Context, arg UpdateAppStatusParams) error {
 	_, err := q.exec(ctx, q.updateAppStatusStmt, updateAppStatus, arg.Status, arg.ID)
 	return err
+}
+
+const updateAppWebhook = `-- name: UpdateAppWebhook :one
+update apps
+set auto_deploy_branch = ?, webhook_secret = ?, updated_at = current_timestamp
+where id = ?
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
+`
+
+type UpdateAppWebhookParams struct {
+	AutoDeployBranch string `json:"auto_deploy_branch"`
+	WebhookSecret    string `json:"webhook_secret"`
+	ID               string `json:"id"`
+}
+
+func (q *Queries) UpdateAppWebhook(ctx context.Context, arg UpdateAppWebhookParams) (App, error) {
+	row := q.queryRow(ctx, q.updateAppWebhookStmt, updateAppWebhook, arg.AutoDeployBranch, arg.WebhookSecret, arg.ID)
+	var i App
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ServerID,
+		&i.Name,
+		&i.GitUrl,
+		&i.Branch,
+		&i.BuildType,
+		&i.InternalPort,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AutoDeployBranch,
+		&i.WebhookSecret,
+	)
+	return i, err
 }
 
 const updateDeploymentStatus = `-- name: UpdateDeploymentStatus :exec

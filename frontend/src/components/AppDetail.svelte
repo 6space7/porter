@@ -2,9 +2,12 @@
   import {
     Activity,
     Boxes,
+    Copy,
     ExternalLink,
     FileText,
+    GitBranch,
     Globe2,
+    KeyRound,
     Play,
     RefreshCw,
     RotateCcw,
@@ -44,9 +47,14 @@
   let envKey = ''
   let envValue = ''
   let envSecret = true
+  let webhookEnabled = false
+  let webhookBranch = ''
+  let webhookURL = ''
+  let webhookSecret = ''
+  let webhookCopied = ''
 
   $: if (app) {
-    const appEditKey = [app.id, app.name, app.branch, app.git_url, app.internal_port].join('\u0000')
+    const appEditKey = [app.id, app.name, app.branch, app.git_url, app.internal_port, app.auto_deploy_branch].join('\u0000')
     const appChanged = app.id !== activeAppID
     if (appEditKey !== activeAppEditKey) {
       activeAppEditKey = appEditKey
@@ -54,6 +62,11 @@
       editBranch = app.branch
       editGitURL = app.git_url
       editPort = app.internal_port
+      webhookEnabled = app.auto_deploy_branch !== ''
+      webhookBranch = app.auto_deploy_branch || app.branch
+      webhookURL = `${window.location.origin}/api/v1/webhooks/github/${app.id}`
+      webhookSecret = ''
+      webhookCopied = ''
     }
     if (appChanged) {
       activeAppID = app.id
@@ -113,6 +126,31 @@
       await onChanged()
       await loadDetail()
     })
+  }
+
+  async function saveWebhook() {
+    if (!app) return
+    await run(async () => {
+      const result = await api.updateAppWebhook(app.id, {
+        enabled: webhookEnabled,
+        branch: webhookEnabled ? webhookBranch.trim() || app.branch : '',
+      })
+      webhookEnabled = result.enabled
+      webhookBranch = result.branch || app.branch
+      webhookURL = result.webhook_url
+      webhookSecret = result.secret ?? ''
+      webhookCopied = ''
+      await onChanged()
+    })
+  }
+
+  async function copyValue(value: string, label: string) {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    webhookCopied = label
+    window.setTimeout(() => {
+      if (webhookCopied === label) webhookCopied = ''
+    }, 1600)
   }
 
   async function lifecycle(action: 'start' | 'stop' | 'restart' | 'deploy') {
@@ -273,6 +311,40 @@
           </div>
         {/each}
       </div>
+    </section>
+
+    <section class="inspector-section">
+      <div class="split-heading">
+        <h3>Webhook</h3>
+        <label class="check-row"><input bind:checked={webhookEnabled} type="checkbox" /> Auto deploy</label>
+      </div>
+      <form class="compact-form" on:submit|preventDefault={saveWebhook}>
+        <label><span>Branch</span><input bind:value={webhookBranch} disabled={!webhookEnabled} /></label>
+        {#if webhookEnabled}
+          <div class="mini-list">
+            <div class="mini-row">
+              <span>
+                <strong>URL</strong>
+                <small>{webhookURL}</small>
+              </span>
+              <button title="Copy webhook URL" type="button" on:click={() => copyValue(webhookURL, 'url')}><Copy size={15} /></button>
+            </div>
+            {#if webhookSecret}
+              <div class="mini-row">
+                <span>
+                  <strong>Secret</strong>
+                  <small>{webhookSecret}</small>
+                </span>
+                <button title="Copy webhook secret" type="button" on:click={() => copyValue(webhookSecret, 'secret')}><KeyRound size={15} /></button>
+              </div>
+            {/if}
+          </div>
+        {/if}
+        {#if webhookCopied}
+          <p class="log-state"><Copy size={13} /> Copied {webhookCopied}</p>
+        {/if}
+        <button class="secondary-action" disabled={detailBusy || (webhookEnabled && !webhookBranch.trim())} type="submit"><GitBranch size={15} /> Save webhook</button>
+      </form>
     </section>
 
     <section class="inspector-section">

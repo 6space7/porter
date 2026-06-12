@@ -12,6 +12,19 @@ export type App = {
   build_type: 'dockerfile' | 'nixpacks'
   internal_port: number
   status: string
+  auto_deploy_branch: string
+}
+
+export type UpdateWebhookInput = {
+  branch: string
+  enabled: boolean
+}
+
+export type WebhookSettings = {
+  webhook_url: string
+  secret?: string
+  branch: string
+  enabled: boolean
 }
 
 export type Domain = {

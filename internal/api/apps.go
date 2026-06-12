@@ -21,6 +21,11 @@ type AppService interface {
 	RestartApp(ctx context.Context, id string) (AppResponse, error)
 }
 
+type AppWebhookService interface {
+	GetAppWebhook(ctx context.Context, id string) (AppWebhookConfig, error)
+	UpdateAppWebhook(ctx context.Context, id string, input UpdateAppWebhookInput) (AppWebhookConfig, error)
+}
+
 type CreateAppInput struct {
 	ProjectID    string
 	Name         string
@@ -39,27 +44,51 @@ type UpdateAppInput struct {
 }
 
 type AppResponse struct {
-	ID           string `json:"id"`
-	ProjectID    string `json:"project_id"`
-	Name         string `json:"name"`
-	GitURL       string `json:"git_url"`
-	Branch       string `json:"branch"`
-	BuildType    string `json:"build_type"`
-	InternalPort int64  `json:"internal_port"`
-	Status       string `json:"status"`
+	ID               string `json:"id"`
+	ProjectID        string `json:"project_id"`
+	Name             string `json:"name"`
+	GitURL           string `json:"git_url"`
+	Branch           string `json:"branch"`
+	BuildType        string `json:"build_type"`
+	InternalPort     int64  `json:"internal_port"`
+	Status           string `json:"status"`
+	AutoDeployBranch string `json:"auto_deploy_branch"`
+}
+
+type UpdateAppWebhookInput struct {
+	Branch  string
+	Enabled bool
+}
+
+type AppWebhookConfig struct {
+	AppID   string
+	Branch  string
+	Secret  string
+	Enabled bool
+}
+
+type AppWebhookResponse struct {
+	WebhookURL string `json:"webhook_url"`
+	Secret     string `json:"secret,omitempty"`
+	Branch     string `json:"branch"`
+	Enabled    bool   `json:"enabled"`
 }
 
 type appHandler struct {
-	apps AppService
+	apps     AppService
+	webhooks AppWebhookService
 }
 
-func mountAppRoutes(router chi.Router, apps AppService) {
-	handler := appHandler{apps: apps}
+func mountAppRoutes(router chi.Router, apps AppService, webhooks AppWebhookService) {
+	handler := appHandler{apps: apps, webhooks: webhooks}
 	router.With(RequireScope("apps:read")).Get("/apps", handler.list)
 	router.With(RequireScope("apps:write")).Post("/apps", handler.create)
 	router.With(RequireScope("apps:read")).Get("/apps/{appID}", handler.get)
 	router.With(RequireScope("apps:write")).Patch("/apps/{appID}", handler.update)
 	router.With(RequireScope("apps:write")).Delete("/apps/{appID}", handler.delete)
+	if webhooks != nil {
+		router.With(RequireScope("apps:write")).Put("/apps/{appID}/webhook", handler.updateWebhook)
+	}
 	router.With(RequireScope("apps:deploy")).Post("/apps/{appID}/stop", handler.stop)
 	router.With(RequireScope("apps:deploy")).Post("/apps/{appID}/start", handler.start)
 	router.With(RequireScope("apps:deploy")).Post("/apps/{appID}/restart", handler.restart)
@@ -199,6 +228,47 @@ func (handler appHandler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler appHandler) updateWebhook(w http.ResponseWriter, r *http.Request) {
+	appID := chi.URLParam(r, "appID")
+	if !validID(appID) {
+		WriteError(w, http.StatusBadRequest, "invalid_app_id", "App id is invalid.", "Use a valid app id returned by the API.", map[string]any{"field": "app_id"})
+		return
+	}
+
+	var input struct {
+		Branch  string `json:"branch"`
+		Enabled bool   `json:"enabled"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid_json", "Request body is not valid JSON.", "Send a JSON object with webhook settings.", nil)
+		return
+	}
+	branch := defaultString(input.Branch, "")
+	if input.Enabled && branch != "" {
+		if err := ValidateBranchName(branch); err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid_branch", "Branch name is invalid.", "Use a simple Git branch name without spaces, flags, or traversal.", map[string]any{"field": "branch"})
+			return
+		}
+	}
+
+	config, err := handler.webhooks.UpdateAppWebhook(r.Context(), appID, UpdateAppWebhookInput{
+		Branch:  branch,
+		Enabled: input.Enabled,
+	})
+	if err != nil {
+		writeAppServiceError(w, err, "Webhook settings could not be updated.")
+		return
+	}
+	writeJSON(w, http.StatusOK, AppWebhookResponse{
+		WebhookURL: webhookURL(r, appID),
+		Secret:     config.Secret,
+		Branch:     config.Branch,
+		Enabled:    config.Enabled,
+	})
 }
 
 func (handler appHandler) stop(w http.ResponseWriter, r *http.Request) {

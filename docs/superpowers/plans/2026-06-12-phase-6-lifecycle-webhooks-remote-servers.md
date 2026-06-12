@@ -234,7 +234,7 @@ git commit -m "feat: add release installer lifecycle"
 - Modify: `frontend/src/lib/api.ts`
 - Modify: `frontend/src/lib/types.ts`
 
-- [ ] **Step 1: Add webhook schema**
+- [x] **Step 1: Add webhook schema**
 
 Add migration:
 
@@ -264,7 +264,7 @@ Run sqlc through:
 go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
 ```
 
-- [ ] **Step 2: Add failing webhook tests**
+- [x] **Step 2: Add failing webhook tests**
 
 Create tests proving:
 
@@ -281,7 +281,7 @@ Use a fake `DeploymentService` and a known payload:
 {"ref":"refs/heads/main","repository":{"clone_url":"https://github.com/example/app.git"}}
 ```
 
-- [ ] **Step 3: Implement webhook handler**
+- [x] **Step 3: Implement webhook handler**
 
 Mount the webhook route outside bearer auth but under `/api/v1/webhooks/github/{appID}`. Load the app, require a non-empty `webhook_secret`, verify:
 
@@ -291,7 +291,7 @@ X-Hub-Signature-256 == "sha256=" + hex(hmac_sha256(secret, raw_body))
 
 using constant-time comparison, parse `ref`, compare it to `auto_deploy_branch`, then call `DeployApp`.
 
-- [ ] **Step 4: Add API/UI webhook settings**
+- [x] **Step 4: Add API/UI webhook settings**
 
 Expose authenticated endpoint:
 
@@ -303,7 +303,7 @@ response: {"webhook_url":"...","secret":"shown-once","branch":"main","enabled":t
 
 Store a new generated secret when enabling. Clear branch/secret when disabling. Add App Detail UI controls to enable/disable and show webhook URL + secret once.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 

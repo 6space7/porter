@@ -62,20 +62,25 @@ insert into apps (
 	status
 )
 values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at;
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret;
 
 -- name: GetApp :one
-select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
+from apps
+where id = ?;
+
+-- name: GetAppByWebhookID :one
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 from apps
 where id = ?;
 
 -- name: ListApps :many
-select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 from apps
 order by created_at desc, name asc;
 
 -- name: ListAppsByProject :many
-select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
+select id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret
 from apps
 where project_id = ?
 order by created_at desc, name asc;
@@ -105,7 +110,13 @@ set
 	internal_port = ?,
 	updated_at = current_timestamp
 where id = ?
-returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at;
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret;
+
+-- name: UpdateAppWebhook :one
+update apps
+set auto_deploy_branch = ?, webhook_secret = ?, updated_at = current_timestamp
+where id = ?
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at, auto_deploy_branch, webhook_secret;
 
 -- name: DeleteApp :exec
 delete from apps

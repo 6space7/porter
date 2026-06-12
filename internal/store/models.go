@@ -9,17 +9,19 @@ import (
 )
 
 type App struct {
-	ID           string `json:"id"`
-	ProjectID    string `json:"project_id"`
-	ServerID     string `json:"server_id"`
-	Name         string `json:"name"`
-	GitUrl       string `json:"git_url"`
-	Branch       string `json:"branch"`
-	BuildType    string `json:"build_type"`
-	InternalPort int64  `json:"internal_port"`
-	Status       string `json:"status"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+	ID               string `json:"id"`
+	ProjectID        string `json:"project_id"`
+	ServerID         string `json:"server_id"`
+	Name             string `json:"name"`
+	GitUrl           string `json:"git_url"`
+	Branch           string `json:"branch"`
+	BuildType        string `json:"build_type"`
+	InternalPort     int64  `json:"internal_port"`
+	Status           string `json:"status"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+	AutoDeployBranch string `json:"auto_deploy_branch"`
+	WebhookSecret    string `json:"webhook_secret"`
 }
 
 type Deployment struct {

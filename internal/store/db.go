@@ -66,6 +66,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAppStmt, err = db.PrepareContext(ctx, getApp); err != nil {
 		return nil, fmt.Errorf("error preparing query GetApp: %w", err)
 	}
+	if q.getAppByWebhookIDStmt, err = db.PrepareContext(ctx, getAppByWebhookID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAppByWebhookID: %w", err)
+	}
 	if q.getDeploymentStmt, err = db.PrepareContext(ctx, getDeployment); err != nil {
 		return nil, fmt.Errorf("error preparing query GetDeployment: %w", err)
 	}
@@ -122,6 +125,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateAppStatusStmt, err = db.PrepareContext(ctx, updateAppStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateAppStatus: %w", err)
+	}
+	if q.updateAppWebhookStmt, err = db.PrepareContext(ctx, updateAppWebhook); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateAppWebhook: %w", err)
 	}
 	if q.updateDeploymentStatusStmt, err = db.PrepareContext(ctx, updateDeploymentStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateDeploymentStatus: %w", err)
@@ -208,6 +214,11 @@ func (q *Queries) Close() error {
 	if q.getAppStmt != nil {
 		if cerr := q.getAppStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAppStmt: %w", cerr)
+		}
+	}
+	if q.getAppByWebhookIDStmt != nil {
+		if cerr := q.getAppByWebhookIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAppByWebhookIDStmt: %w", cerr)
 		}
 	}
 	if q.getDeploymentStmt != nil {
@@ -305,6 +316,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateAppStatusStmt: %w", cerr)
 		}
 	}
+	if q.updateAppWebhookStmt != nil {
+		if cerr := q.updateAppWebhookStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateAppWebhookStmt: %w", cerr)
+		}
+	}
 	if q.updateDeploymentStatusStmt != nil {
 		if cerr := q.updateDeploymentStatusStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateDeploymentStatusStmt: %w", cerr)
@@ -378,6 +394,7 @@ type Queries struct {
 	deleteProjectStmt           *sql.Stmt
 	deleteTokenStmt             *sql.Stmt
 	getAppStmt                  *sql.Stmt
+	getAppByWebhookIDStmt       *sql.Stmt
 	getDeploymentStmt           *sql.Stmt
 	getDomainStmt               *sql.Stmt
 	getDomainByHostnameStmt     *sql.Stmt
@@ -397,6 +414,7 @@ type Queries struct {
 	updateAppBuildTypeStmt      *sql.Stmt
 	updateAppInternalPortStmt   *sql.Stmt
 	updateAppStatusStmt         *sql.Stmt
+	updateAppWebhookStmt        *sql.Stmt
 	updateDeploymentStatusStmt  *sql.Stmt
 	updateDomainVerifiedStmt    *sql.Stmt
 	updateProjectNameStmt       *sql.Stmt
@@ -421,6 +439,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteProjectStmt:           q.deleteProjectStmt,
 		deleteTokenStmt:             q.deleteTokenStmt,
 		getAppStmt:                  q.getAppStmt,
+		getAppByWebhookIDStmt:       q.getAppByWebhookIDStmt,
 		getDeploymentStmt:           q.getDeploymentStmt,
 		getDomainStmt:               q.getDomainStmt,
 		getDomainByHostnameStmt:     q.getDomainByHostnameStmt,
@@ -440,6 +459,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateAppBuildTypeStmt:      q.updateAppBuildTypeStmt,
 		updateAppInternalPortStmt:   q.updateAppInternalPortStmt,
 		updateAppStatusStmt:         q.updateAppStatusStmt,
+		updateAppWebhookStmt:        q.updateAppWebhookStmt,
 		updateDeploymentStatusStmt:  q.updateDeploymentStatusStmt,
 		updateDomainVerifiedStmt:    q.updateDomainVerifiedStmt,
 		updateProjectNameStmt:       q.updateProjectNameStmt,

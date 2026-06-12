@@ -58,3 +58,7 @@ This log records product and engineering decisions that are not already fixed by
   the existing bearer-token middleware. Tool handlers call the same API service
   interfaces as the dashboard, while `/llms.txt` and `/api/v1/docs` stay public
   because they contain endpoint and scope metadata but no secrets.
+- Git push webhooks stay unauthenticated at the bearer-token layer so hosted Git
+  providers can call them directly, but each enabled app stores its own generated
+  HMAC secret. Porter verifies the raw request body before parsing JSON and
+  skips branch mismatches without starting a deployment.

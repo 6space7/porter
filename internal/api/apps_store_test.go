@@ -205,6 +205,70 @@ func TestStoreAppServiceLifecycleUsesRuntimeAndPersistsStatus(t *testing.T) {
 	}
 }
 
+func TestStoreAppServiceUpdatesWebhookSettings(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, store.Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer db.Close()
+
+	queries := store.New(db.SQL())
+	_, err = queries.CreateProject(ctx, store.CreateProjectParams{
+		ID:   "proj_1",
+		Name: "demo",
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	service := api.NewStoreAppServiceWithOptions(queries, api.StoreAppServiceOptions{
+		NewAppID: func() string {
+			return "app_test"
+		},
+		NewWebhookSecret: func() (string, error) {
+			return "secret_1", nil
+		},
+	})
+	if _, err := service.CreateApp(ctx, api.CreateAppInput{
+		ProjectID:    "proj_1",
+		Name:         "web",
+		GitURL:       "https://github.com/example/web.git",
+		Branch:       "main",
+		BuildType:    "dockerfile",
+		InternalPort: 3000,
+	}); err != nil {
+		t.Fatalf("create app: %v", err)
+	}
+
+	enabled, err := service.UpdateAppWebhook(ctx, "app_test", api.UpdateAppWebhookInput{
+		Branch:  "release",
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("enable webhook: %v", err)
+	}
+	if !enabled.Enabled || enabled.Branch != "release" || enabled.Secret != "secret_1" {
+		t.Fatalf("enabled webhook = %#v", enabled)
+	}
+
+	loaded, err := service.GetAppWebhook(ctx, "app_test")
+	if err != nil {
+		t.Fatalf("load webhook: %v", err)
+	}
+	if loaded != enabled {
+		t.Fatalf("loaded webhook = %#v, want %#v", loaded, enabled)
+	}
+
+	disabled, err := service.UpdateAppWebhook(ctx, "app_test", api.UpdateAppWebhookInput{Enabled: false})
+	if err != nil {
+		t.Fatalf("disable webhook: %v", err)
+	}
+	if disabled.Enabled || disabled.Branch != "" || disabled.Secret != "" {
+		t.Fatalf("disabled webhook = %#v", disabled)
+	}
+}
+
 type fakeAppRuntime struct {
 	started    string
 	stopped    string
