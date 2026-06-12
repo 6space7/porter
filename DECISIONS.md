@@ -34,3 +34,7 @@ This log records product and engineering decisions that are not already fixed by
   failure with an empty current-record list, not an internal server error.
 - Dockerfile apps re-detect the first valid `EXPOSE` port on every deploy and
   update the stored app route when it differs from the previous/default port.
+- Phase 3 Docker image retention keeps the newest five distinct successful
+  image tags per app. Older deployment history remains in SQLite, but pruned
+  records have `image_tag` cleared so they are visibly unavailable for
+  rollback.

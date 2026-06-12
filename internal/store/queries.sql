@@ -128,6 +128,11 @@ update deployments
 set status = ?, stage = ?, build_log = ?, image_tag = ?
 where id = ?;
 
+-- name: ClearDeploymentImageTag :exec
+update deployments
+set image_tag = null
+where id = ?;
+
 -- name: GetDeployment :one
 select id, app_id, status, stage, build_log, image_tag, created_at
 from deployments
@@ -137,7 +142,7 @@ where id = ?;
 select id, app_id, status, stage, build_log, image_tag, created_at
 from deployments
 where app_id = ?
-order by created_at desc;
+order by created_at desc, id desc;
 
 -- name: UpsertEnvVar :one
 insert into env_vars (app_id, key, value, is_secret)

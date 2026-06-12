@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"testing"
 
 	"github.com/6space7/porter/internal/api"
@@ -104,6 +105,76 @@ func TestStoreDeploymentServicePersistsDetectedPortAndReconcilesRoutes(t *testin
 	}
 	if routeUpdater.calls != 1 {
 		t.Fatalf("route updater calls = %d, want 1", routeUpdater.calls)
+	}
+}
+
+func TestStoreDeploymentServicePrunesOlderDeploymentImagesAfterSuccessfulDeploy(t *testing.T) {
+	ctx := context.Background()
+	queries, closeDB := setupAppForDeploymentServiceTest(t, ctx)
+	defer closeDB()
+	for _, deployment := range []struct {
+		id       string
+		imageTag string
+	}{
+		{id: "dep_1", imageTag: "porter/app_1:dep_1"},
+		{id: "dep_2", imageTag: "porter/app_1:dep_2"},
+		{id: "dep_3", imageTag: "porter/app_1:dep_3"},
+	} {
+		if _, err := queries.CreateDeployment(ctx, store.CreateDeploymentParams{
+			ID:       deployment.id,
+			AppID:    "app_1",
+			Status:   "running",
+			Stage:    "running",
+			BuildLog: "previous deploy\n",
+			ImageTag: sql.NullString{String: deployment.imageTag, Valid: true},
+		}); err != nil {
+			t.Fatalf("create %s: %v", deployment.id, err)
+		}
+	}
+
+	pruner := &fakeImagePruner{}
+	pipeline := deploy.Pipeline{
+		Store: deploy.NewStoreDeploymentStore(queries, func() string {
+			return "dep_4"
+		}),
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_4/source"}, nil
+		}),
+		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
+			return deploy.BuildResult{ImageTag: "porter/app_1:dep_4"}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(context.Context, deploy.RunRequest) (string, error) {
+			return "started\n", nil
+		}),
+	}
+	service := api.NewStoreDeploymentServiceWithOptions(queries, pipeline, nil, api.StoreDeploymentServiceOptions{
+		ImagePruner:    pruner,
+		ImageRetention: 2,
+	})
+
+	if _, err := service.DeployApp(ctx, "app_1"); err != nil {
+		t.Fatalf("deploy app: %v", err)
+	}
+	if got, want := pruner.removed, []string{"porter/app_1:dep_2", "porter/app_1:dep_1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("removed images = %#v, want %#v", got, want)
+	}
+	for _, id := range []string{"dep_1", "dep_2"} {
+		deployment, err := queries.GetDeployment(ctx, id)
+		if err != nil {
+			t.Fatalf("get %s: %v", id, err)
+		}
+		if deployment.ImageTag.Valid {
+			t.Fatalf("%s image tag still valid: %q", id, deployment.ImageTag.String)
+		}
+	}
+	for _, id := range []string{"dep_3", "dep_4"} {
+		deployment, err := queries.GetDeployment(ctx, id)
+		if err != nil {
+			t.Fatalf("get %s: %v", id, err)
+		}
+		if !deployment.ImageTag.Valid {
+			t.Fatalf("%s image tag was pruned", id)
+		}
 	}
 }
 
@@ -216,5 +287,14 @@ type fakeRouteUpdater struct {
 
 func (updater *fakeRouteUpdater) Reconcile(context.Context) error {
 	updater.calls++
+	return nil
+}
+
+type fakeImagePruner struct {
+	removed []string
+}
+
+func (pruner *fakeImagePruner) RemoveImage(_ context.Context, imageTag string) error {
+	pruner.removed = append(pruner.removed, imageTag)
 	return nil
 }

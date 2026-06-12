@@ -54,7 +54,11 @@ Deployments clone the target Git repo into the workspace, detect a Dockerfile
 `EXPOSE` port when present, build through the Docker SDK, run the app container
 on the shared `porter-proxy` Docker network, update the stored internal port
 when detection changes it, and record staged deployment logs with known secret
-values redacted.
+values redacted. Successful deployments and rollbacks retain Docker image tags
+for rollback. Porter keeps the newest five distinct successful image tags per
+app, prunes older images from Docker, and clears old deployment `image_tag`
+values so the API/UI can show history without advertising unavailable rollback
+targets.
 
 Production source installs use:
 

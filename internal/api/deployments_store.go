@@ -12,10 +12,18 @@ type storeDeploymentService struct {
 	pipeline     deploy.Pipeline
 	envVars      EnvVarService
 	routeUpdater RouteUpdater
+	imagePruner  ImagePruner
+	retention    int
 }
 
 type StoreDeploymentServiceOptions struct {
-	RouteUpdater RouteUpdater
+	RouteUpdater   RouteUpdater
+	ImagePruner    ImagePruner
+	ImageRetention int
+}
+
+type ImagePruner interface {
+	RemoveImage(ctx context.Context, imageTag string) error
 }
 
 func NewStoreDeploymentService(queries *store.Queries, pipeline deploy.Pipeline, envVars EnvVarService) DeploymentService {
@@ -28,6 +36,8 @@ func NewStoreDeploymentServiceWithOptions(queries *store.Queries, pipeline deplo
 		pipeline:     pipeline,
 		envVars:      envVars,
 		routeUpdater: opts.RouteUpdater,
+		imagePruner:  opts.ImagePruner,
+		retention:    opts.ImageRetention,
 	}
 }
 
@@ -60,6 +70,9 @@ func (service storeDeploymentService) DeployApp(ctx context.Context, appID strin
 		return deploymentResponseFromRecord(record), err
 	}
 	if err := service.persistDetectedPort(ctx, app.ID, app.InternalPort, record.InternalPort); err != nil {
+		return deploymentResponseFromRecord(record), err
+	}
+	if err := service.pruneDeploymentImages(ctx, app.ID); err != nil {
 		return deploymentResponseFromRecord(record), err
 	}
 	return deploymentResponseFromRecord(record), nil
@@ -100,6 +113,9 @@ func (service storeDeploymentService) RollbackApp(ctx context.Context, appID, de
 	if err := service.persistAppStatus(ctx, app.ID, string(record.Status)); err != nil {
 		return deploymentResponseFromRecord(record), err
 	}
+	if err := service.pruneDeploymentImages(ctx, app.ID); err != nil {
+		return deploymentResponseFromRecord(record), err
+	}
 	return deploymentResponseFromRecord(record), nil
 }
 
@@ -137,6 +153,54 @@ func (service storeDeploymentService) ListDeployments(ctx context.Context, appID
 		responses = append(responses, deploymentResponseFromStore(row))
 	}
 	return responses, nil
+}
+
+func (service storeDeploymentService) pruneDeploymentImages(ctx context.Context, appID string) error {
+	if service.imagePruner == nil {
+		return nil
+	}
+	retention := service.retention
+	if retention <= 0 {
+		retention = 5
+	}
+	rows, err := service.queries.ListDeploymentsByApp(ctx, appID)
+	if err != nil {
+		return err
+	}
+
+	retained := make(map[string]bool)
+	for _, row := range rows {
+		if row.Status != string(deploy.StatusRunning) || !row.ImageTag.Valid || row.ImageTag.String == "" {
+			continue
+		}
+		if retained[row.ImageTag.String] {
+			continue
+		}
+		if len(retained) >= retention {
+			continue
+		}
+		retained[row.ImageTag.String] = true
+	}
+
+	removed := make(map[string]bool)
+	for _, row := range rows {
+		if row.Status != string(deploy.StatusRunning) || !row.ImageTag.Valid || row.ImageTag.String == "" {
+			continue
+		}
+		if retained[row.ImageTag.String] {
+			continue
+		}
+		if !removed[row.ImageTag.String] {
+			if err := service.imagePruner.RemoveImage(ctx, row.ImageTag.String); err != nil {
+				return err
+			}
+			removed[row.ImageTag.String] = true
+		}
+		if err := service.queries.ClearDeploymentImageTag(ctx, row.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (service storeDeploymentService) envAndSecretValues(ctx context.Context, appID string) (map[string]string, []string, error) {

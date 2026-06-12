@@ -13,6 +13,7 @@ import (
 
 	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -22,6 +23,7 @@ import (
 
 type dockerClient interface {
 	ImageBuild(ctx context.Context, buildContext io.Reader, options build.ImageBuildOptions) (build.ImageBuildResponse, error)
+	ImageRemove(ctx context.Context, imageID string, options image.RemoveOptions) ([]image.DeleteResponse, error)
 	ContainerRemove(ctx context.Context, containerID string, options container.RemoveOptions) error
 	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
 	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
@@ -171,6 +173,20 @@ func (backend *SDKBackend) RemoveContainer(ctx context.Context, containerName st
 	}
 	if err := backend.client.ContainerRemove(ctx, containerName, container.RemoveOptions{Force: true}); err != nil && !errdefs.IsNotFound(err) {
 		return fmt.Errorf("remove container: %w", err)
+	}
+	return nil
+}
+
+func (backend *SDKBackend) RemoveImage(ctx context.Context, imageTag string) error {
+	if backend == nil || backend.client == nil {
+		return fmt.Errorf("docker client is required")
+	}
+	if imageTag == "" {
+		return fmt.Errorf("image tag is required")
+	}
+	_, err := backend.client.ImageRemove(ctx, imageTag, image.RemoveOptions{Force: true, PruneChildren: true})
+	if err != nil && !errdefs.IsNotFound(err) {
+		return fmt.Errorf("remove image: %w", err)
 	}
 	return nil
 }

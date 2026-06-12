@@ -24,6 +24,9 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
+	if q.clearDeploymentImageTagStmt, err = db.PrepareContext(ctx, clearDeploymentImageTag); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearDeploymentImageTag: %w", err)
+	}
 	if q.createAppStmt, err = db.PrepareContext(ctx, createApp); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateApp: %w", err)
 	}
@@ -125,6 +128,11 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 
 func (q *Queries) Close() error {
 	var err error
+	if q.clearDeploymentImageTagStmt != nil {
+		if cerr := q.clearDeploymentImageTagStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearDeploymentImageTagStmt: %w", cerr)
+		}
+	}
 	if q.createAppStmt != nil {
 		if cerr := q.createAppStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createAppStmt: %w", cerr)
@@ -324,6 +332,7 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 type Queries struct {
 	db                          DBTX
 	tx                          *sql.Tx
+	clearDeploymentImageTagStmt *sql.Stmt
 	createAppStmt               *sql.Stmt
 	createDeploymentStmt        *sql.Stmt
 	createDomainStmt            *sql.Stmt
@@ -362,6 +371,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db:                          tx,
 		tx:                          tx,
+		clearDeploymentImageTagStmt: q.clearDeploymentImageTagStmt,
 		createAppStmt:               q.createAppStmt,
 		createDeploymentStmt:        q.createDeploymentStmt,
 		createDomainStmt:            q.createDomainStmt,

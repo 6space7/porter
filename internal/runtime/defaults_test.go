@@ -27,4 +27,7 @@ func TestDefaultDeploymentStagesUseGitAndDockerBackends(t *testing.T) {
 	if _, ok := stages.Runner.(dockerstage.Runner); !ok {
 		t.Fatalf("runner = %T, want docker.Runner", stages.Runner)
 	}
+	if stages.ImagePruner == nil {
+		t.Fatal("image pruner must be configured")
+	}
 }

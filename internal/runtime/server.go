@@ -32,6 +32,7 @@ type Options struct {
 	Runner       deploy.Runner
 	AppRuntime   api.AppRuntime
 	RuntimeLogs  api.RuntimeLogStreamer
+	ImagePruner  api.ImagePruner
 	CaddyRuntime proxy.CaddyRuntime
 	CaddyAdmin   proxy.CaddyAdmin
 }
@@ -128,6 +129,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		EnvVars: envVars,
 		Deployments: api.NewStoreDeploymentServiceWithOptions(queries, pipeline, envVars, api.StoreDeploymentServiceOptions{
 			RouteUpdater: routeUpdater,
+			ImagePruner:  chooseImagePruner(opts.ImagePruner, defaultStages.ImagePruner),
 		}),
 		Logs:     api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
 		CaddyAsk: caddyAsk,
@@ -233,6 +235,7 @@ type deploymentStages struct {
 	Runner      deploy.Runner
 	AppRuntime  api.AppRuntime
 	RuntimeLogs api.RuntimeLogStreamer
+	ImagePruner api.ImagePruner
 }
 
 func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
@@ -246,6 +249,7 @@ func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
 		Runner:      dockerstage.Runner{Containers: backend},
 		AppRuntime:  dockerstage.AppController{Containers: backend},
 		RuntimeLogs: dockerstage.RuntimeLogs{Containers: backend},
+		ImagePruner: backend,
 	}, nil
 }
 
@@ -278,6 +282,13 @@ func chooseAppRuntime(override api.AppRuntime, fallback api.AppRuntime) api.AppR
 }
 
 func chooseRuntimeLogs(override api.RuntimeLogStreamer, fallback api.RuntimeLogStreamer) api.RuntimeLogStreamer {
+	if override != nil {
+		return override
+	}
+	return fallback
+}
+
+func chooseImagePruner(override api.ImagePruner, fallback api.ImagePruner) api.ImagePruner {
 	if override != nil {
 		return override
 	}

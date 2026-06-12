@@ -10,6 +10,17 @@ import (
 	"database/sql"
 )
 
+const clearDeploymentImageTag = `-- name: ClearDeploymentImageTag :exec
+update deployments
+set image_tag = null
+where id = ?
+`
+
+func (q *Queries) ClearDeploymentImageTag(ctx context.Context, id string) error {
+	_, err := q.exec(ctx, q.clearDeploymentImageTagStmt, clearDeploymentImageTag, id)
+	return err
+}
+
 const createApp = `-- name: CreateApp :one
 insert into apps (
 	id,
@@ -503,7 +514,7 @@ const listDeploymentsByApp = `-- name: ListDeploymentsByApp :many
 select id, app_id, status, stage, build_log, image_tag, created_at
 from deployments
 where app_id = ?
-order by created_at desc
+order by created_at desc, id desc
 `
 
 func (q *Queries) ListDeploymentsByApp(ctx context.Context, appID string) ([]Deployment, error) {

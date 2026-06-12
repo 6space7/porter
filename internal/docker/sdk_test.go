@@ -10,6 +10,7 @@ import (
 	dockerstage "github.com/6space7/porter/internal/docker"
 	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -176,6 +177,33 @@ func TestSDKBackendRemoveContainerIgnoresMissingContainer(t *testing.T) {
 	}
 }
 
+func TestSDKBackendRemovesImagesForRetention(t *testing.T) {
+	client := &fakeDockerClient{}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	if err := backend.RemoveImage(context.Background(), "porter/app_1:dep_1"); err != nil {
+		t.Fatalf("remove image: %v", err)
+	}
+
+	if client.removedImage != "porter/app_1:dep_1" {
+		t.Fatalf("removed image = %q", client.removedImage)
+	}
+	if !client.imageRemoveOptions.Force || !client.imageRemoveOptions.PruneChildren {
+		t.Fatalf("image remove options = %#v", client.imageRemoveOptions)
+	}
+}
+
+func TestSDKBackendRemoveImageIgnoresMissingImage(t *testing.T) {
+	client := &fakeDockerClient{
+		imageRemoveError: errdefs.NotFound(errors.New("no such image")),
+	}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	if err := backend.RemoveImage(context.Background(), "porter/app_1:dep_1"); err != nil {
+		t.Fatalf("remove missing image: %v", err)
+	}
+}
+
 func TestSDKBackendStreamsContainerLogs(t *testing.T) {
 	client := &fakeDockerClient{
 		logsResponse: io.NopCloser(strings.NewReader(multiplexedStdout("runtime line\n"))),
@@ -208,13 +236,16 @@ type fakeDockerClient struct {
 	buildOptions  build.ImageBuildOptions
 	buildResponse build.ImageBuildResponse
 
-	removedName   string
-	removeOptions container.RemoveOptions
-	removeError   error
-	createdName   string
-	createID      string
-	startedID     string
-	stoppedID     string
+	removedName        string
+	removeOptions      container.RemoveOptions
+	removeError        error
+	createdName        string
+	createID           string
+	startedID          string
+	stoppedID          string
+	removedImage       string
+	imageRemoveOptions image.RemoveOptions
+	imageRemoveError   error
 
 	containerConfig container.Config
 	hostConfig      container.HostConfig
@@ -231,6 +262,12 @@ func (client *fakeDockerClient) ImageBuild(_ context.Context, buildContext io.Re
 	client.buildContext = buildContext
 	client.buildOptions = options
 	return client.buildResponse, nil
+}
+
+func (client *fakeDockerClient) ImageRemove(_ context.Context, imageID string, options image.RemoveOptions) ([]image.DeleteResponse, error) {
+	client.removedImage = imageID
+	client.imageRemoveOptions = options
+	return nil, client.imageRemoveError
 }
 
 func (client *fakeDockerClient) ContainerRemove(_ context.Context, containerID string, options container.RemoveOptions) error {
