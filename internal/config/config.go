@@ -5,12 +5,14 @@ import "os"
 type Config struct {
 	HTTPAddr     string
 	DatabasePath string
+	PublicIP     string
 }
 
 func Load() Config {
 	return Config{
 		HTTPAddr:     envOrDefault("PORTER_HTTP_ADDR", ":8080"),
 		DatabasePath: envOrDefault("PORTER_DATABASE_PATH", "porter.db"),
+		PublicIP:     os.Getenv("PORTER_PUBLIC_IP"),
 	}
 }
 

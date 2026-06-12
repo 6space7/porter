@@ -20,7 +20,7 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "porter.db")
 
-	db, handler, err := runtime.NewHandler(ctx, config.Config{DatabasePath: dbPath})
+	db, handler, err := runtime.NewHandler(ctx, config.Config{DatabasePath: dbPath, PublicIP: "203.0.113.42"})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
 	}
@@ -70,5 +70,20 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("app status = %d, want %d; body=%s", rr.Code, http.StatusCreated, rr.Body.String())
+	}
+
+	var app struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &app); err != nil {
+		t.Fatalf("decode app response: %v", err)
+	}
+
+	domains, err := store.New(db.SQL()).ListDomainsByApp(ctx, app.ID)
+	if err != nil {
+		t.Fatalf("list app domains: %v", err)
+	}
+	if len(domains) != 1 || domains[0].Hostname != "web.203-0-113-42.sslip.io" {
+		t.Fatalf("domains = %#v", domains)
 	}
 }

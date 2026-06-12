@@ -3,28 +3,51 @@ package api
 import (
 	"context"
 
+	"github.com/6space7/porter/internal/proxy"
 	"github.com/6space7/porter/internal/store"
 )
 
 type appIDFunc func() string
 
+type StoreAppServiceOptions struct {
+	NewAppID    func() string
+	NewDomainID func() string
+	PublicIP    string
+}
+
 type storeAppService struct {
-	queries *store.Queries
-	newID   appIDFunc
+	queries     *store.Queries
+	newAppID    appIDFunc
+	newDomainID appIDFunc
+	publicIP    string
 }
 
 func NewStoreAppService(queries *store.Queries, newID appIDFunc) AppService {
-	if newID == nil {
-		newID = func() string {
+	return NewStoreAppServiceWithOptions(queries, StoreAppServiceOptions{NewAppID: newID})
+}
+
+func NewStoreAppServiceWithOptions(queries *store.Queries, opts StoreAppServiceOptions) AppService {
+	if opts.NewAppID == nil {
+		opts.NewAppID = func() string {
 			return randomPrefixedID("app")
 		}
 	}
-	return storeAppService{queries: queries, newID: newID}
+	if opts.NewDomainID == nil {
+		opts.NewDomainID = func() string {
+			return randomPrefixedID("dom")
+		}
+	}
+	return storeAppService{
+		queries:     queries,
+		newAppID:    opts.NewAppID,
+		newDomainID: opts.NewDomainID,
+		publicIP:    opts.PublicIP,
+	}
 }
 
 func (service storeAppService) CreateApp(ctx context.Context, input CreateAppInput) (AppResponse, error) {
 	app, err := service.queries.CreateApp(ctx, store.CreateAppParams{
-		ID:           service.newID(),
+		ID:           service.newAppID(),
 		ProjectID:    input.ProjectID,
 		ServerID:     "local",
 		Name:         input.Name,
@@ -36,6 +59,21 @@ func (service storeAppService) CreateApp(ctx context.Context, input CreateAppInp
 	})
 	if err != nil {
 		return AppResponse{}, err
+	}
+	if service.publicIP != "" {
+		hostname, err := proxy.GenerateSSLIPDomain(input.Name, service.publicIP)
+		if err != nil {
+			return AppResponse{}, err
+		}
+		if _, err := service.queries.CreateDomain(ctx, store.CreateDomainParams{
+			ID:       service.newDomainID(),
+			AppID:    app.ID,
+			Hostname: hostname,
+			Type:     "generated",
+			Verified: 1,
+		}); err != nil {
+			return AppResponse{}, err
+		}
 	}
 	return appResponse(app), nil
 }

@@ -52,3 +52,57 @@ func TestStoreAppServicePersistsApps(t *testing.T) {
 		t.Fatalf("apps = %#v", apps)
 	}
 }
+
+func TestStoreAppServiceCreatesGeneratedDomainWhenPublicIPConfigured(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, store.Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer db.Close()
+
+	queries := store.New(db.SQL())
+	_, err = queries.CreateProject(ctx, store.CreateProjectParams{
+		ID:   "proj_1",
+		Name: "demo",
+	})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	service := api.NewStoreAppServiceWithOptions(queries, api.StoreAppServiceOptions{
+		NewAppID: func() string {
+			return "app_test"
+		},
+		NewDomainID: func() string {
+			return "dom_test"
+		},
+		PublicIP: "203.0.113.42",
+	})
+
+	_, err = service.CreateApp(ctx, api.CreateAppInput{
+		ProjectID:    "proj_1",
+		Name:         "web",
+		GitURL:       "https://github.com/example/web.git",
+		Branch:       "main",
+		BuildType:    "dockerfile",
+		InternalPort: 3000,
+	})
+	if err != nil {
+		t.Fatalf("create app: %v", err)
+	}
+
+	domains, err := queries.ListDomainsByApp(ctx, "app_test")
+	if err != nil {
+		t.Fatalf("list domains: %v", err)
+	}
+	if len(domains) != 1 {
+		t.Fatalf("domains = %#v, want one generated domain", domains)
+	}
+	if domains[0].ID != "dom_test" || domains[0].Hostname != "web.203-0-113-42.sslip.io" {
+		t.Fatalf("domain = %#v", domains[0])
+	}
+	if domains[0].Type != "generated" || domains[0].Verified != 1 {
+		t.Fatalf("domain type/verified = %q/%d", domains[0].Type, domains[0].Verified)
+	}
+}
