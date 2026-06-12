@@ -2,8 +2,7 @@ package api
 
 import (
 	"context"
-	"database/sql"
-	"errors"
+	"strings"
 
 	"github.com/6space7/porter/internal/store"
 )
@@ -17,12 +16,15 @@ func NewStoreCaddyAskService(queries *store.Queries) CaddyAskService {
 }
 
 func (service storeCaddyAskService) IsDomainAllowed(ctx context.Context, hostname string) (bool, error) {
-	domain, err := service.queries.GetDomainByHostname(ctx, hostname)
+	hostname = strings.ToLower(strings.TrimSpace(hostname))
+	routes, err := service.queries.ListVerifiedProxyRoutes(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
 		return false, err
 	}
-	return domain.Verified == 1, nil
+	for _, route := range routes {
+		if strings.ToLower(strings.TrimSpace(route.Hostname)) == hostname {
+			return true, nil
+		}
+	}
+	return false, nil
 }

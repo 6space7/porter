@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/6space7/porter/internal/api"
@@ -39,6 +40,34 @@ func TestStoreCaddyAskServiceAllowsOnlyVerifiedDomains(t *testing.T) {
 	if _, err := queries.CreateDomain(ctx, store.CreateDomainParams{ID: "dom_pending", AppID: "app_1", Hostname: "pending.example.com", Type: "custom", Verified: 0}); err != nil {
 		t.Fatalf("create pending domain: %v", err)
 	}
+	if _, err := queries.CreateService(ctx, store.CreateServiceParams{
+		ID:               "svc_public",
+		ProjectID:        "proj_1",
+		ServerID:         "local",
+		TemplateSlug:     "n8n",
+		Name:             "n8n",
+		Status:           "running",
+		GeneratedSecrets: "{}",
+		InternalPort:     5678,
+		Exposed:          1,
+		Hostname:         sql.NullString{String: "n8n.example.com", Valid: true},
+	}); err != nil {
+		t.Fatalf("create exposed service: %v", err)
+	}
+	if _, err := queries.CreateService(ctx, store.CreateServiceParams{
+		ID:               "svc_internal",
+		ProjectID:        "proj_1",
+		ServerID:         "local",
+		TemplateSlug:     "postgres",
+		Name:             "postgres",
+		Status:           "running",
+		GeneratedSecrets: "{}",
+		InternalPort:     5432,
+		Exposed:          0,
+		Hostname:         sql.NullString{String: "db.example.com", Valid: true},
+	}); err != nil {
+		t.Fatalf("create internal service: %v", err)
+	}
 
 	service := api.NewStoreCaddyAskService(queries)
 	allowed, err := service.IsDomainAllowed(ctx, "web.example.com")
@@ -55,6 +84,22 @@ func TestStoreCaddyAskServiceAllowsOnlyVerifiedDomains(t *testing.T) {
 	}
 	if allowed {
 		t.Fatal("expected unverified domain to be denied")
+	}
+
+	allowed, err = service.IsDomainAllowed(ctx, "n8n.example.com")
+	if err != nil {
+		t.Fatalf("check exposed service: %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected exposed service hostname to be allowed")
+	}
+
+	allowed, err = service.IsDomainAllowed(ctx, "db.example.com")
+	if err != nil {
+		t.Fatalf("check internal service: %v", err)
+	}
+	if allowed {
+		t.Fatal("expected internal service hostname to be denied")
 	}
 
 	allowed, err = service.IsDomainAllowed(ctx, "missing.example.com")
