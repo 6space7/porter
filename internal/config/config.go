@@ -3,12 +3,14 @@ package config
 import "os"
 
 type Config struct {
-	HTTPAddr string
+	HTTPAddr     string
+	DatabasePath string
 }
 
 func Load() Config {
 	return Config{
-		HTTPAddr: envOrDefault("PORTER_HTTP_ADDR", ":8080"),
+		HTTPAddr:     envOrDefault("PORTER_HTTP_ADDR", ":8080"),
+		DatabasePath: envOrDefault("PORTER_DATABASE_PATH", "porter.db"),
 	}
 }
 
