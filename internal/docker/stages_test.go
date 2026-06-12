@@ -185,7 +185,7 @@ func TestServiceRunnerPullsImageAndRunsServiceContainer(t *testing.T) {
 	if len(spec.Mounts) != 1 || spec.Mounts[0].Source != "porter-svc-svc_1-data" || spec.Mounts[0].Target != "/var/lib/postgresql/data" {
 		t.Fatalf("mounts = %#v", spec.Mounts)
 	}
-	if spec.Privileged || !reflect.DeepEqual(spec.CapDrop, []string{"ALL"}) {
+	if spec.Privileged || len(spec.CapDrop) != 0 {
 		t.Fatalf("unsafe spec = %#v", spec)
 	}
 }

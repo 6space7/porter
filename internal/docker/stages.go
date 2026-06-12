@@ -200,7 +200,6 @@ func (runner ServiceRunner) DeployService(ctx context.Context, req services.Depl
 		Env:          envList(req.Env),
 		Mounts:       serviceMounts(req.ServiceID, req.Volumes),
 		Privileged:   false,
-		CapDrop:      []string{"ALL"},
 		MemoryBytes:  defaultMemoryBytes,
 		NanoCPUs:     defaultNanoCPUs,
 	})
