@@ -116,6 +116,28 @@ export type ApiToken = {
   scopes: string[]
 }
 
+export type AgentDocs = {
+  name: string
+  description: string
+  api_base: string
+  mcp_endpoint: string
+  auth: {
+    header: string
+    scheme: string
+    example: string
+  }
+  tools: Array<{
+    name: string
+    scopes: string[]
+    description: string
+  }>
+  examples: Array<{
+    name: string
+    description: string
+    body: Record<string, unknown>
+  }>
+}
+
 export type ApiErrorBody = {
   error: {
     code: string

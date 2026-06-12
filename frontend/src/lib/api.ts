@@ -1,4 +1,5 @@
 import type {
+  AgentDocs,
   ApiErrorBody,
   ApiToken,
   App,
@@ -137,6 +138,10 @@ export class PorterApi {
 
   async createToken(name: string, scopes: string[]) {
     return this.request<ApiToken>('POST', '/auth/tokens', { name, scopes })
+  }
+
+  async docs() {
+    return this.request<AgentDocs>('GET', '/docs')
   }
 
   async serviceTemplates(search = '') {

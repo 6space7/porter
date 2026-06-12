@@ -227,7 +227,7 @@ Expected: PASS.
 - Modify: `frontend/src/lib/types.ts`
 - Modify: `frontend/src/app.css`
 
-- [ ] **Step 1: Add TypeScript/API support**
+- [x] **Step 1: Add TypeScript/API support**
 
 Add `docs()` and `createToken("agent", scopes)` usage. The settings panel should generate a scoped token with:
 
@@ -241,7 +241,7 @@ services:read
 services:write
 ```
 
-- [ ] **Step 2: Add onboarding panel**
+- [x] **Step 2: Add onboarding panel**
 
 In Settings, add a "Connect your AI agent" section with:
 
@@ -255,7 +255,7 @@ Link to /llms.txt
 
 Only show the plaintext token once after creation.
 
-- [ ] **Step 3: Verify frontend**
+- [x] **Step 3: Verify frontend**
 
 Run:
 

@@ -717,6 +717,106 @@ label {
   border-bottom: 1px solid var(--line);
 }
 
+.agent-onboarding {
+  display: grid;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfa;
+  padding: 16px;
+}
+
+.agent-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-head p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.agent-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(15, 143, 114, 0.22);
+  border-radius: 7px;
+  background: #eefbf6;
+  color: var(--accent-strong);
+}
+
+.agent-links,
+.agent-token-row {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.agent-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.agent-token-row label {
+  flex: 1 1 auto;
+}
+
+.agent-token-row .primary-action {
+  width: auto;
+  min-width: 190px;
+}
+
+.copy-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-field input {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.config-block {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.config-block .split-heading {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.config-block pre {
+  min-height: 186px;
+  max-height: 260px;
+}
+
 .token-output {
   display: grid;
   gap: 8px;
@@ -735,6 +835,14 @@ label {
   padding: 10px;
   font-family: var(--mono);
   font-size: 12px;
+}
+
+.agent-token-output {
+  margin: 0;
+}
+
+.agent-token-output code {
+  min-width: 0;
 }
 
 @media (max-width: 1120px) {
@@ -825,6 +933,28 @@ label {
   }
 
   .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-head {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .agent-links {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+
+  .agent-token-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agent-token-row .primary-action {
+    width: 100%;
+  }
+
+  .config-grid {
     grid-template-columns: 1fr;
   }
 }

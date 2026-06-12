@@ -201,6 +201,7 @@
             <ServicesPanel {api} {projects} {apps} {busy} />
           {:else}
             <SettingsPanel
+              {api}
               {projects}
               {busy}
               onCreateProject={createProject}

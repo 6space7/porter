@@ -1,7 +1,10 @@
 <script lang="ts">
-  import { KeyRound, Pencil, Plus, Trash2 } from '@lucide/svelte'
-  import type { ApiToken, Project } from '../lib/types'
+  import { Bot, Check, Copy, ExternalLink, FileJson, KeyRound, Pencil, Plus, Trash2 } from '@lucide/svelte'
+  import { onMount } from 'svelte'
+  import type { PorterApi } from '../lib/api'
+  import type { AgentDocs, ApiToken, Project } from '../lib/types'
 
+  export let api: PorterApi
   export let projects: Project[] = []
   export let busy = false
   export let onCreateProject: (name: string) => Promise<Project>
@@ -12,8 +15,56 @@
   let projectName = ''
   let tokenName = ''
   let token: ApiToken | undefined
+  let agentToken: ApiToken | undefined
+  let agentTokenName = 'agent'
+  let agentDocs: AgentDocs | undefined
+  let agentDocsError = ''
+  let copied = ''
   let tokenScopes = new Set(['apps:read', 'apps:deploy'])
-  const scopes = ['projects:read', 'projects:write', 'apps:read', 'apps:write', 'apps:deploy', 'tokens:write']
+  const agentScopes = [
+    'projects:read',
+    'projects:write',
+    'apps:read',
+    'apps:write',
+    'apps:deploy',
+    'services:read',
+    'services:write',
+  ]
+  const scopes = [...agentScopes, 'tokens:write']
+
+  $: mcpEndpoint = absoluteURL(agentDocs?.mcp_endpoint ?? '/api/v1/mcp')
+  $: llmsURL = absoluteURL('/llms.txt')
+  $: docsURL = absoluteURL('/api/v1/docs')
+  $: agentBearer = agentToken?.token ?? '<porter token>'
+  $: claudeConfig = JSON.stringify(
+    {
+      mcpServers: {
+        porter: {
+          type: 'http',
+          url: mcpEndpoint,
+          headers: { Authorization: `Bearer ${agentBearer}` },
+        },
+      },
+    },
+    null,
+    2,
+  )
+  $: cursorConfig = JSON.stringify(
+    {
+      mcpServers: {
+        porter: {
+          url: mcpEndpoint,
+          headers: { Authorization: `Bearer ${agentBearer}` },
+        },
+      },
+    },
+    null,
+    2,
+  )
+
+  onMount(() => {
+    void loadAgentDocs()
+  })
 
   async function createProject() {
     if (!projectName.trim()) return
@@ -38,6 +89,10 @@
     tokenName = ''
   }
 
+  async function createAgentToken() {
+    agentToken = await onCreateToken(agentTokenName.trim() || 'agent', agentScopes)
+  }
+
   function toggleScope(scope: string) {
     if (tokenScopes.has(scope)) {
       tokenScopes.delete(scope)
@@ -46,13 +101,103 @@
     }
     tokenScopes = new Set(tokenScopes)
   }
+
+  async function loadAgentDocs() {
+    agentDocsError = ''
+    try {
+      agentDocs = await api.docs()
+    } catch {
+      agentDocsError = 'Agent docs unavailable'
+    }
+  }
+
+  async function copyText(key: string, value: string) {
+    await navigator.clipboard.writeText(value)
+    copied = key
+    window.setTimeout(() => {
+      if (copied === key) copied = ''
+    }, 1400)
+  }
+
+  function absoluteURL(value: string) {
+    if (/^https?:\/\//.test(value)) return value
+    const origin = typeof window === 'undefined' ? '' : window.location.origin
+    return `${origin}${value}`
+  }
 </script>
 
 <section class="settings-panel" aria-labelledby="settings-title">
   <div class="section-heading">
     <div>
       <h2 id="settings-title">Settings</h2>
-      <p>Projects and agent tokens</p>
+      <p>Projects, tokens, and MCP</p>
+    </div>
+  </div>
+
+  <div class="agent-onboarding" aria-labelledby="agent-title">
+    <div class="agent-head">
+      <span class="agent-icon"><Bot size={18} /></span>
+      <div>
+        <h3 id="agent-title">Connect your AI agent</h3>
+        <p>{agentDocs ? `${agentDocs.tools.length} MCP tools available` : agentDocsError || 'MCP endpoint ready'}</p>
+      </div>
+      <div class="agent-links">
+        <a href={llmsURL} target="_blank" rel="noreferrer"><FileJson size={14} /> llms.txt</a>
+        <a href={docsURL} target="_blank" rel="noreferrer"><ExternalLink size={14} /> JSON docs</a>
+      </div>
+    </div>
+
+    <label>
+      <span>MCP endpoint</span>
+      <div class="copy-field">
+        <input readonly value={mcpEndpoint} />
+        <button class="icon-button" title="Copy MCP endpoint" type="button" on:click={() => copyText('endpoint', mcpEndpoint)}>
+          {#if copied === 'endpoint'}<Check size={15} />{:else}<Copy size={15} />{/if}
+        </button>
+      </div>
+    </label>
+
+    <div class="agent-token-row">
+      <label>
+        <span>Agent token name</span>
+        <input bind:value={agentTokenName} placeholder="agent" />
+      </label>
+      <button class="primary-action" disabled={busy || !agentTokenName.trim()} type="button" on:click={createAgentToken}>
+        <KeyRound size={15} /> Generate agent token
+      </button>
+    </div>
+
+    {#if agentToken}
+      <div class="token-output agent-token-output">
+        <strong>Agent token shown once</strong>
+        <div class="copy-field">
+          <code>{agentToken.token}</code>
+          <button class="icon-button" title="Copy agent token" type="button" on:click={() => copyText('agent-token', agentToken?.token ?? '')}>
+            {#if copied === 'agent-token'}<Check size={15} />{:else}<Copy size={15} />{/if}
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <div class="config-grid">
+      <div class="config-block">
+        <div class="split-heading">
+          <span>Claude Code</span>
+          <button class="icon-button" title="Copy Claude Code config" type="button" on:click={() => copyText('claude', claudeConfig)}>
+            {#if copied === 'claude'}<Check size={15} />{:else}<Copy size={15} />{/if}
+          </button>
+        </div>
+        <pre>{claudeConfig}</pre>
+      </div>
+      <div class="config-block">
+        <div class="split-heading">
+          <span>Cursor</span>
+          <button class="icon-button" title="Copy Cursor config" type="button" on:click={() => copyText('cursor', cursorConfig)}>
+            {#if copied === 'cursor'}<Check size={15} />{:else}<Copy size={15} />{/if}
+          </button>
+        </div>
+        <pre>{cursorConfig}</pre>
+      </div>
     </div>
   </div>
 

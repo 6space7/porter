@@ -30,9 +30,9 @@ one-click rollback/image retention, source install, secure secret handling, and
 an embedded Svelte web UI for the core one-server workflows. It also supports
 Dockerfile-less Nixpacks builds, service catalog templates, internal service
 attachment, public HTTPS service routes, an authenticated MCP HTTP endpoint,
-and machine-readable agent docs. Remaining work in Phase 5 adds dashboard
-onboarding for agents; later phases add multi-server deploys, GitHub
-auto-deploy, and release lifecycle automation.
+machine-readable agent docs, and dashboard onboarding for AI agents. Remaining
+work in Phase 5 is VPS verification; later phases add multi-server deploys,
+GitHub auto-deploy, and release lifecycle automation.
 
 Verified on 2026-06-12:
 
