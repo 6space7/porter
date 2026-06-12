@@ -135,6 +135,38 @@ func TestPipelinePassesEnvAndInternalPortToRunner(t *testing.T) {
 	}
 }
 
+func TestPipelinePassesBuildTypeToBuilderAndResult(t *testing.T) {
+	store := &fakeDeploymentStore{}
+	pipeline := deploy.Pipeline{
+		Store: store,
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source"}, nil
+		}),
+		Builder: deploy.BuilderFunc(func(_ context.Context, req deploy.BuildRequest) (deploy.BuildResult, error) {
+			if req.BuildType != "nixpacks" {
+				t.Fatalf("build type = %q, want nixpacks", req.BuildType)
+			}
+			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1", BuildType: "nixpacks"}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(context.Context, deploy.RunRequest) (string, error) {
+			return "started\n", nil
+		}),
+	}
+
+	result, err := pipeline.Run(context.Background(), deploy.Request{
+		AppID:     "app_1",
+		GitURL:    "https://github.com/example/web.git",
+		Branch:    "main",
+		BuildType: "nixpacks",
+	})
+	if err != nil {
+		t.Fatalf("run pipeline: %v", err)
+	}
+	if result.BuildType != "nixpacks" {
+		t.Fatalf("result build type = %q, want nixpacks", result.BuildType)
+	}
+}
+
 func TestPipelineUsesDetectedDockerfilePortForRunner(t *testing.T) {
 	store := &fakeDeploymentStore{}
 	pipeline := deploy.Pipeline{

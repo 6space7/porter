@@ -2,8 +2,11 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -18,6 +21,10 @@ const (
 
 type ImageBackend interface {
 	BuildImage(ctx context.Context, sourceDir, imageTag string) (string, error)
+}
+
+type NixpacksBackend interface {
+	BuildWithNixpacks(ctx context.Context, sourceDir, imageTag string) (string, error)
 }
 
 type ContainerBackend interface {
@@ -48,23 +55,63 @@ type ContainerSpec struct {
 }
 
 type Builder struct {
-	Images ImageBackend
+	Images   ImageBackend
+	Nixpacks NixpacksBackend
 }
 
 func (builder Builder) Build(ctx context.Context, req deploy.BuildRequest) (deploy.BuildResult, error) {
 	if req.SourceDir == "" {
 		return deploy.BuildResult{}, fmt.Errorf("source dir is required")
 	}
+
+	imageTag := ImageTag(req.AppID, req.DeploymentID)
+	buildType, err := builder.resolveBuildType(req)
+	if err != nil {
+		return deploy.BuildResult{}, err
+	}
+	if buildType == "nixpacks" {
+		if builder.Nixpacks == nil {
+			return deploy.BuildResult{}, fmt.Errorf("nixpacks backend is required")
+		}
+		log, err := builder.Nixpacks.BuildWithNixpacks(ctx, req.SourceDir, imageTag)
+		if err != nil {
+			return deploy.BuildResult{ImageTag: imageTag, Log: log, BuildType: "nixpacks"}, err
+		}
+		return deploy.BuildResult{ImageTag: imageTag, Log: log, BuildType: "nixpacks"}, nil
+	}
 	if builder.Images == nil {
 		return deploy.BuildResult{}, fmt.Errorf("image backend is required")
 	}
-
-	imageTag := ImageTag(req.AppID, req.DeploymentID)
 	log, err := builder.Images.BuildImage(ctx, req.SourceDir, imageTag)
 	if err != nil {
-		return deploy.BuildResult{ImageTag: imageTag, Log: log}, err
+		return deploy.BuildResult{ImageTag: imageTag, Log: log, BuildType: "dockerfile"}, err
 	}
-	return deploy.BuildResult{ImageTag: imageTag, Log: log}, nil
+	return deploy.BuildResult{ImageTag: imageTag, Log: log, BuildType: "dockerfile"}, nil
+}
+
+func (builder Builder) resolveBuildType(req deploy.BuildRequest) (string, error) {
+	if req.BuildType == "nixpacks" {
+		return "nixpacks", nil
+	}
+	hasDockerfile, err := dockerfileExists(req.SourceDir)
+	if err != nil {
+		return "", err
+	}
+	if hasDockerfile {
+		return "dockerfile", nil
+	}
+	return "nixpacks", nil
+}
+
+func dockerfileExists(sourceDir string) (bool, error) {
+	_, err := os.Stat(filepath.Join(sourceDir, "Dockerfile"))
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
 
 type Runner struct {

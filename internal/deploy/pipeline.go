@@ -27,6 +27,7 @@ type Request struct {
 	AppID        string
 	GitURL       string
 	Branch       string
+	BuildType    string
 	InternalPort int64
 	Env          map[string]string
 	Secrets      []string
@@ -48,6 +49,7 @@ type DeploymentRecord struct {
 	Stage        Stage
 	BuildLog     string
 	ImageTag     string
+	BuildType    string
 	InternalPort int64
 }
 
@@ -82,11 +84,13 @@ type BuildRequest struct {
 	AppID        string
 	DeploymentID string
 	SourceDir    string
+	BuildType    string
 }
 
 type BuildResult struct {
-	ImageTag string
-	Log      string
+	ImageTag  string
+	Log       string
+	BuildType string
 }
 
 type Builder interface {
@@ -165,11 +169,13 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 		AppID:        req.AppID,
 		DeploymentID: record.ID,
 		SourceDir:    cloneResult.SourceDir,
+		BuildType:    req.BuildType,
 	})
 	logs.WriteString(buildResult.Log)
 	if err != nil {
 		return pipeline.fail(ctx, record, StageBuilding, logs.String(), req.Secrets, err)
 	}
+	record.BuildType = buildResult.BuildType
 
 	if err := pipeline.mark(ctx, &record, StatusRunning, StageStarting, RedactSecrets(logs.String(), req.Secrets), buildResult.ImageTag); err != nil {
 		return record, err

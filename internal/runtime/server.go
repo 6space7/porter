@@ -245,7 +245,7 @@ func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
 	}
 	return deploymentStages{
 		Cloner:      deploy.GitCloner{Root: cfg.WorkspacePath},
-		Builder:     dockerstage.Builder{Images: backend},
+		Builder:     dockerstage.Builder{Images: backend, Nixpacks: dockerstage.NixpacksCLI{}},
 		Runner:      dockerstage.Runner{Containers: backend},
 		AppRuntime:  dockerstage.AppController{Containers: backend},
 		RuntimeLogs: dockerstage.RuntimeLogs{Containers: backend},

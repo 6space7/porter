@@ -41,6 +41,9 @@ func TestStoreDeploymentServiceRunsPipelineAndListsDeployments(t *testing.T) {
 			if req.Env["DATABASE_URL"] != "postgres://internal" || req.Env["PUBLIC_URL"] != "https://web.example.com" {
 				t.Fatalf("env = %#v", req.Env)
 			}
+			if req.Env["PORT"] != "3000" {
+				t.Fatalf("PORT env = %q, want 3000", req.Env["PORT"])
+			}
 			return "started\n", nil
 		}),
 	}
@@ -105,6 +108,42 @@ func TestStoreDeploymentServicePersistsDetectedPortAndReconcilesRoutes(t *testin
 	}
 	if routeUpdater.calls != 1 {
 		t.Fatalf("route updater calls = %d, want 1", routeUpdater.calls)
+	}
+}
+
+func TestStoreDeploymentServicePersistsDetectedBuildType(t *testing.T) {
+	ctx := context.Background()
+	queries, closeDB := setupAppForDeploymentServiceTest(t, ctx)
+	defer closeDB()
+
+	pipeline := deploy.Pipeline{
+		Store: deploy.NewStoreDeploymentStore(queries, func() string {
+			return "dep_1"
+		}),
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source"}, nil
+		}),
+		Builder: deploy.BuilderFunc(func(_ context.Context, req deploy.BuildRequest) (deploy.BuildResult, error) {
+			if req.BuildType != "dockerfile" {
+				t.Fatalf("build type = %q, want stored dockerfile preference", req.BuildType)
+			}
+			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1", BuildType: "nixpacks"}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(context.Context, deploy.RunRequest) (string, error) {
+			return "started\n", nil
+		}),
+	}
+	service := api.NewStoreDeploymentService(queries, pipeline, nil)
+
+	if _, err := service.DeployApp(ctx, "app_1"); err != nil {
+		t.Fatalf("deploy app: %v", err)
+	}
+	app, err := queries.GetApp(ctx, "app_1")
+	if err != nil {
+		t.Fatalf("get app: %v", err)
+	}
+	if app.BuildType != "nixpacks" {
+		t.Fatalf("stored build type = %q, want nixpacks", app.BuildType)
 	}
 }
 

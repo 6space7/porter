@@ -3,6 +3,8 @@ package docker_test
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,13 +14,18 @@ import (
 )
 
 func TestBuilderBuildsDeterministicImageTagFromSourceDir(t *testing.T) {
+	sourceDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sourceDir, "Dockerfile"), []byte("FROM scratch\n"), 0o600); err != nil {
+		t.Fatalf("write Dockerfile: %v", err)
+	}
 	images := &fakeImageBackend{log: "docker build log\n"}
 	builder := dockerstage.Builder{Images: images}
 
 	result, err := builder.Build(context.Background(), deploy.BuildRequest{
 		AppID:        "app_1",
 		DeploymentID: "dep_1",
-		SourceDir:    "work/app_1/dep_1/source",
+		SourceDir:    sourceDir,
+		BuildType:    "dockerfile",
 	})
 	if err != nil {
 		t.Fatalf("build: %v", err)
@@ -30,8 +37,61 @@ func TestBuilderBuildsDeterministicImageTagFromSourceDir(t *testing.T) {
 	if result.Log != "docker build log\n" {
 		t.Fatalf("log = %q", result.Log)
 	}
-	if images.sourceDir != "work/app_1/dep_1/source" || images.imageTag != "porter/app_1:dep_1" {
+	if result.BuildType != "dockerfile" {
+		t.Fatalf("build type = %q, want dockerfile", result.BuildType)
+	}
+	if images.sourceDir != sourceDir || images.imageTag != "porter/app_1:dep_1" {
 		t.Fatalf("backend call = source %q tag %q", images.sourceDir, images.imageTag)
+	}
+}
+
+func TestBuilderUsesNixpacksWhenRequested(t *testing.T) {
+	nixpacks := &fakeNixpacksBackend{log: "nixpacks build log\n"}
+	images := &fakeImageBackend{log: "docker build log\n"}
+	builder := dockerstage.Builder{Images: images, Nixpacks: nixpacks}
+
+	result, err := builder.Build(context.Background(), deploy.BuildRequest{
+		AppID:        "app_1",
+		DeploymentID: "dep_1",
+		SourceDir:    t.TempDir(),
+		BuildType:    "nixpacks",
+	})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if images.called {
+		t.Fatal("dockerfile image backend should not be called for explicit nixpacks")
+	}
+	if !nixpacks.called || nixpacks.imageTag != "porter/app_1:dep_1" {
+		t.Fatalf("nixpacks backend call = %#v", nixpacks)
+	}
+	if result.BuildType != "nixpacks" || result.Log != "nixpacks build log\n" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestBuilderFallsBackToNixpacksWhenDockerfileMissing(t *testing.T) {
+	nixpacks := &fakeNixpacksBackend{log: "nixpacks fallback log\n"}
+	images := &fakeImageBackend{log: "docker build log\n"}
+	builder := dockerstage.Builder{Images: images, Nixpacks: nixpacks}
+
+	result, err := builder.Build(context.Background(), deploy.BuildRequest{
+		AppID:        "app_1",
+		DeploymentID: "dep_1",
+		SourceDir:    t.TempDir(),
+		BuildType:    "dockerfile",
+	})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if images.called {
+		t.Fatal("dockerfile image backend should not be called without a Dockerfile")
+	}
+	if !nixpacks.called {
+		t.Fatal("nixpacks backend should be called when Dockerfile is missing")
+	}
+	if result.BuildType != "nixpacks" {
+		t.Fatalf("build type = %q, want nixpacks", result.BuildType)
 	}
 }
 
@@ -144,6 +204,20 @@ type fakeImageBackend struct {
 }
 
 func (backend *fakeImageBackend) BuildImage(_ context.Context, sourceDir, imageTag string) (string, error) {
+	backend.called = true
+	backend.sourceDir = sourceDir
+	backend.imageTag = imageTag
+	return backend.log, nil
+}
+
+type fakeNixpacksBackend struct {
+	called    bool
+	sourceDir string
+	imageTag  string
+	log       string
+}
+
+func (backend *fakeNixpacksBackend) BuildWithNixpacks(_ context.Context, sourceDir, imageTag string) (string, error) {
 	backend.called = true
 	backend.sourceDir = sourceDir
 	backend.imageTag = imageTag

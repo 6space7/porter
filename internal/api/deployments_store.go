@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/6space7/porter/internal/deploy"
 	"github.com/6space7/porter/internal/store"
@@ -51,11 +52,13 @@ func (service storeDeploymentService) DeployApp(ctx context.Context, appID strin
 	if err != nil {
 		return DeploymentResponse{}, err
 	}
+	env = ensurePortEnv(env, app.InternalPort)
 
 	record, err := service.pipeline.Run(ctx, deploy.Request{
 		AppID:        app.ID,
 		GitURL:       app.GitUrl,
 		Branch:       app.Branch,
+		BuildType:    app.BuildType,
 		InternalPort: app.InternalPort,
 		Env:          env,
 		Secrets:      secrets,
@@ -70,6 +73,9 @@ func (service storeDeploymentService) DeployApp(ctx context.Context, appID strin
 		return deploymentResponseFromRecord(record), err
 	}
 	if err := service.persistDetectedPort(ctx, app.ID, app.InternalPort, record.InternalPort); err != nil {
+		return deploymentResponseFromRecord(record), err
+	}
+	if err := service.persistDetectedBuildType(ctx, app.ID, app.BuildType, record.BuildType); err != nil {
 		return deploymentResponseFromRecord(record), err
 	}
 	if err := service.pruneDeploymentImages(ctx, app.ID); err != nil {
@@ -95,6 +101,7 @@ func (service storeDeploymentService) RollbackApp(ctx context.Context, appID, de
 	if err != nil {
 		return DeploymentResponse{}, err
 	}
+	env = ensurePortEnv(env, app.InternalPort)
 
 	record, err := service.pipeline.Rollback(ctx, deploy.RollbackRequest{
 		AppID:              app.ID,
@@ -119,6 +126,19 @@ func (service storeDeploymentService) RollbackApp(ctx context.Context, appID, de
 	return deploymentResponseFromRecord(record), nil
 }
 
+func ensurePortEnv(env map[string]string, internalPort int64) map[string]string {
+	if internalPort <= 0 {
+		internalPort = 3000
+	}
+	if env == nil {
+		env = map[string]string{}
+	}
+	if _, ok := env["PORT"]; !ok {
+		env["PORT"] = strconv.FormatInt(internalPort, 10)
+	}
+	return env
+}
+
 func (service storeDeploymentService) persistAppStatus(ctx context.Context, appID, status string) error {
 	return service.queries.UpdateAppStatus(ctx, store.UpdateAppStatusParams{
 		Status: status,
@@ -140,6 +160,16 @@ func (service storeDeploymentService) persistDetectedPort(ctx context.Context, a
 		return service.routeUpdater.Reconcile(ctx)
 	}
 	return nil
+}
+
+func (service storeDeploymentService) persistDetectedBuildType(ctx context.Context, appID, storedBuildType, detectedBuildType string) error {
+	if detectedBuildType == "" || detectedBuildType == storedBuildType {
+		return nil
+	}
+	return service.queries.UpdateAppBuildType(ctx, store.UpdateAppBuildTypeParams{
+		BuildType: detectedBuildType,
+		ID:        appID,
+	})
 }
 
 func (service storeDeploymentService) ListDeployments(ctx context.Context, appID string) ([]DeploymentResponse, error) {

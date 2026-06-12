@@ -21,8 +21,12 @@ func TestDefaultDeploymentStagesUseGitAndDockerBackends(t *testing.T) {
 	if cloner.Root != "C:/porter/work" {
 		t.Fatalf("cloner root = %q", cloner.Root)
 	}
-	if _, ok := stages.Builder.(dockerstage.Builder); !ok {
+	builder, ok := stages.Builder.(dockerstage.Builder)
+	if !ok {
 		t.Fatalf("builder = %T, want docker.Builder", stages.Builder)
+	}
+	if builder.Nixpacks == nil {
+		t.Fatal("builder must include a nixpacks backend")
 	}
 	if _, ok := stages.Runner.(dockerstage.Runner); !ok {
 		t.Fatalf("runner = %T, want docker.Runner", stages.Runner)

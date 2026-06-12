@@ -64,6 +64,11 @@ update apps
 set internal_port = ?, updated_at = current_timestamp
 where id = ?;
 
+-- name: UpdateAppBuildType :exec
+update apps
+set build_type = ?, updated_at = current_timestamp
+where id = ?;
+
 -- name: UpdateApp :one
 update apps
 set

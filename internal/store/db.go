@@ -105,6 +105,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateAppStmt, err = db.PrepareContext(ctx, updateApp); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateApp: %w", err)
 	}
+	if q.updateAppBuildTypeStmt, err = db.PrepareContext(ctx, updateAppBuildType); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateAppBuildType: %w", err)
+	}
 	if q.updateAppInternalPortStmt, err = db.PrepareContext(ctx, updateAppInternalPort); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateAppInternalPort: %w", err)
 	}
@@ -263,6 +266,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateAppStmt: %w", cerr)
 		}
 	}
+	if q.updateAppBuildTypeStmt != nil {
+		if cerr := q.updateAppBuildTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateAppBuildTypeStmt: %w", cerr)
+		}
+	}
 	if q.updateAppInternalPortStmt != nil {
 		if cerr := q.updateAppInternalPortStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateAppInternalPortStmt: %w", cerr)
@@ -359,6 +367,7 @@ type Queries struct {
 	listProjectsStmt            *sql.Stmt
 	listVerifiedProxyRoutesStmt *sql.Stmt
 	updateAppStmt               *sql.Stmt
+	updateAppBuildTypeStmt      *sql.Stmt
 	updateAppInternalPortStmt   *sql.Stmt
 	updateAppStatusStmt         *sql.Stmt
 	updateDeploymentStatusStmt  *sql.Stmt
@@ -398,6 +407,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listProjectsStmt:            q.listProjectsStmt,
 		listVerifiedProxyRoutesStmt: q.listVerifiedProxyRoutesStmt,
 		updateAppStmt:               q.updateAppStmt,
+		updateAppBuildTypeStmt:      q.updateAppBuildTypeStmt,
 		updateAppInternalPortStmt:   q.updateAppInternalPortStmt,
 		updateAppStatusStmt:         q.updateAppStatusStmt,
 		updateDeploymentStatusStmt:  q.updateDeploymentStatusStmt,

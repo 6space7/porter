@@ -741,6 +741,22 @@ func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, erro
 	return i, err
 }
 
+const updateAppBuildType = `-- name: UpdateAppBuildType :exec
+update apps
+set build_type = ?, updated_at = current_timestamp
+where id = ?
+`
+
+type UpdateAppBuildTypeParams struct {
+	BuildType string `json:"build_type"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdateAppBuildType(ctx context.Context, arg UpdateAppBuildTypeParams) error {
+	_, err := q.exec(ctx, q.updateAppBuildTypeStmt, updateAppBuildType, arg.BuildType, arg.ID)
+	return err
+}
+
 const updateAppInternalPort = `-- name: UpdateAppInternalPort :exec
 update apps
 set internal_port = ?, updated_at = current_timestamp
