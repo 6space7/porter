@@ -12,6 +12,7 @@ import (
 
 	"github.com/6space7/porter/internal/auth"
 	"github.com/6space7/porter/internal/config"
+	secretcrypto "github.com/6space7/porter/internal/crypto"
 	"github.com/6space7/porter/internal/runtime"
 	"github.com/6space7/porter/internal/store"
 )
@@ -19,11 +20,20 @@ import (
 func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "porter.db")
+	masterKey, err := secretcrypto.GenerateMasterKey()
+	if err != nil {
+		t.Fatalf("generate master key: %v", err)
+	}
+	secretBox, err := secretcrypto.NewSecretBox(masterKey)
+	if err != nil {
+		t.Fatalf("new secret box: %v", err)
+	}
 
 	db, handler, err := runtime.NewHandlerWithOptions(ctx, config.Config{DatabasePath: dbPath, PublicIP: "203.0.113.42"}, runtime.Options{
 		Resolver: fakeResolver{
 			"custom.example.com": []string{"203.0.113.42"},
 		},
+		SecretBox: secretBox,
 	})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
@@ -98,6 +108,18 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("custom domain status = %d, want %d; body=%s", rr.Code, http.StatusCreated, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/apps/"+app.ID+"/env", bytes.NewBufferString(`{"key":"DATABASE_URL","value":"postgres://secret","is_secret":true}`))
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("env var status = %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "••••") || strings.Contains(rr.Body.String(), "postgres://secret") {
+		t.Fatalf("env var response leaked secret or missed mask: %s", rr.Body.String())
 	}
 }
 

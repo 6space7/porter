@@ -6,12 +6,14 @@ import (
 
 	"github.com/6space7/porter/internal/api"
 	"github.com/6space7/porter/internal/config"
+	secretcrypto "github.com/6space7/porter/internal/crypto"
 	"github.com/6space7/porter/internal/proxy"
 	"github.com/6space7/porter/internal/store"
 )
 
 type Options struct {
-	Resolver proxy.Resolver
+	Resolver  proxy.Resolver
+	SecretBox *secretcrypto.SecretBox
 }
 
 func NewHandler(ctx context.Context, cfg config.Config) (*store.DB, http.Handler, error) {
@@ -35,6 +37,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 			Resolver: opts.Resolver,
 			ServerIP: cfg.PublicIP,
 		}),
+		EnvVars: api.NewStoreEnvVarService(queries, opts.SecretBox),
 	})
 	return db, handler, nil
 }
