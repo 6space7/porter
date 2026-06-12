@@ -38,6 +38,16 @@ bootstraps an initial hashed admin bearer token when provided, prepares Docker
 deployment/log backends, optionally ensures the managed Caddy container exists,
 reconciles verified domains into Caddy, and then serves the API.
 
+Route reconciliation uses SQLite as the source of truth. Startup reconciles all
+verified domains, and app creation, custom-domain creation, and deploy-time
+port changes trigger another Caddy load through the admin API.
+
+Deployments clone the target Git repo into the workspace, detect a Dockerfile
+`EXPOSE` port when present, build through the Docker SDK, run the app container
+on the shared `porter-proxy` Docker network, update the stored internal port
+when detection changes it, and record staged deployment logs with known secret
+values redacted.
+
 Production source installs use:
 
 - `/etc/porter` for config and the master key;

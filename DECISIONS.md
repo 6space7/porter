@@ -25,3 +25,12 @@ This log records product and engineering decisions that are not already fixed by
 - Until release binaries exist, the installer builds from source and installs a
   supported Go toolchain from the official Go distribution when the host has no
   suitable Go version.
+- Caddy full-config updates use `POST /load`, not `PUT /config`, and the admin
+  load call retries briefly because the managed Caddy container can accept a TCP
+  connection before the admin API is ready.
+- Caddy on-demand TLS is configured with the current HTTP permission module
+  shape, while the admin listener stays enabled in the loaded config.
+- Missing DNS for a custom domain is treated as a structured DNS preflight
+  failure with an empty current-record list, not an internal server error.
+- Dockerfile apps re-detect the first valid `EXPOSE` port on every deploy and
+  update the stored app route when it differs from the previous/default port.

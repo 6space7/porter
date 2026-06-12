@@ -22,10 +22,26 @@ The product is built phase by phase from the project brief:
 
 ## Status
 
-Phase 1 is in progress. The current binary provides the core JSON API, SQLite
-store, scoped bearer-token auth, Docker deployment pipeline, managed Caddy
-routing, stored build logs, and runtime log streaming. The Svelte UI is not
-part of Phase 1.
+Phase 1 backend is complete and has been verified on a fresh Ubuntu VPS. The
+current binary provides the core JSON API, SQLite store, scoped bearer-token
+auth, Docker deployment pipeline, Dockerfile `EXPOSE` port detection, managed
+Caddy routing, stored build logs, runtime log streaming, source install, and
+secure secret handling. The Svelte UI is Phase 2.
+
+Verified on 2026-06-12:
+
+- source install brings the platform up over HTTPS on an sslip.io domain;
+- a public Dockerfile repo deploys through the JSON API and is reachable over
+  HTTPS on its generated app domain;
+- Caddy routes update when app/domain/deploy settings change;
+- custom-domain DNS preflight returns the required A record when DNS is wrong;
+- broken Dockerfile builds return `status=failed`, `stage=building`, and a
+  build log;
+- env var changes apply on redeploy and secret values stay masked in API/build
+  logs;
+- scoped and unauthenticated requests are rejected;
+- malicious Git URLs are rejected;
+- Caddy's admin API is bound to localhost only.
 
 ## Source Install
 
@@ -90,6 +106,10 @@ APP_ID="$(
     python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])'
 )"
 ```
+
+`internal_port` may be left at the default for many Dockerfile apps. During
+deploy, porter re-detects a Dockerfile `EXPOSE` port when one is present and
+updates the stored route before serving traffic.
 
 Deploy and inspect logs:
 
