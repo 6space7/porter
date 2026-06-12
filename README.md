@@ -44,6 +44,8 @@ Verified on 2026-06-12:
 - scoped and unauthenticated requests are rejected;
 - malicious Git URLs are rejected;
 - Caddy's admin API is bound to localhost only.
+- the embedded UI is served by the installed binary over local HTTP and the
+  HTTPS sslip.io platform URL.
 
 Local browser checks also cover the embedded UI login/logout flow, apps
 dashboard, app creation form, app detail actions, domains, environment editor,
