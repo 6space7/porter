@@ -38,3 +38,5 @@ This log records product and engineering decisions that are not already fixed by
   image tags per app. Older deployment history remains in SQLite, but pruned
   records have `image_tag` cleared so they are visibly unavailable for
   rollback.
+- Phase 3 verification covers both API and browser paths: deploy a working v1,
+  deploy a broken v2, then roll back to v1 without running a new Docker build.

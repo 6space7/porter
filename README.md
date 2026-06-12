@@ -22,14 +22,14 @@ The product is built phase by phase from the project brief:
 
 ## Status
 
-Phase 1 backend is complete and has been verified on a fresh Ubuntu VPS. The
-current binary provides the core JSON API, SQLite store, scoped bearer-token
-auth, Docker deployment pipeline, Dockerfile `EXPOSE` port detection, managed
-Caddy routing, stored build logs, runtime log streaming, deployment history
-with rollback/image retention, source install, secure secret handling, and an
-embedded Svelte web UI for the core one-server workflows. Later phases add the
-service catalog/Nixpacks, MCP, multi-server deploys, GitHub auto-deploy, and
-release lifecycle automation.
+Phases 0 through 3 are complete and verified on a fresh Ubuntu VPS. The current
+binary provides the core JSON API, SQLite store, scoped bearer-token auth,
+Docker deployment pipeline, Dockerfile `EXPOSE` port detection, managed Caddy
+routing, stored build logs, runtime log streaming, deployment history with
+one-click rollback/image retention, source install, secure secret handling, and
+an embedded Svelte web UI for the core one-server workflows. Remaining phases
+add the service catalog/Nixpacks, MCP, multi-server deploys, GitHub
+auto-deploy, and release lifecycle automation.
 
 Verified on 2026-06-12:
 
@@ -49,6 +49,8 @@ Verified on 2026-06-12:
   HTTPS sslip.io platform URL;
 - rollback targets retain the newest five successful Docker image tags per app,
   and older deployment records are kept without rollback image tags.
+- API and browser rollback checks deploy a working v1, deploy an intentionally
+  broken v2, and restore v1 without a rebuild.
 
 Local browser checks also cover the embedded UI login/logout flow, apps
 dashboard, app creation form, app detail actions, domains, environment editor,
