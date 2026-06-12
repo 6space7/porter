@@ -276,7 +276,7 @@ Expected: PASS.
 - Modify: `ARCHITECTURE.md`
 - Modify: `DECISIONS.md`
 
-- [ ] **Step 1: Full local verification**
+- [x] **Step 1: Full local verification**
 
 Run:
 
