@@ -73,6 +73,13 @@ from domains
 where app_id = ?
 order by created_at asc;
 
+-- name: ListVerifiedProxyRoutes :many
+select domains.hostname, apps.id as app_id, apps.internal_port
+from domains
+join apps on apps.id = domains.app_id
+where domains.verified = 1
+order by domains.hostname asc;
+
 -- name: DeleteDomain :exec
 delete from domains
 where id = ?;

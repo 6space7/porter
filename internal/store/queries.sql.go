@@ -615,6 +615,43 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 	return items, nil
 }
 
+const listVerifiedProxyRoutes = `-- name: ListVerifiedProxyRoutes :many
+select domains.hostname, apps.id as app_id, apps.internal_port
+from domains
+join apps on apps.id = domains.app_id
+where domains.verified = 1
+order by domains.hostname asc
+`
+
+type ListVerifiedProxyRoutesRow struct {
+	Hostname     string `json:"hostname"`
+	AppID        string `json:"app_id"`
+	InternalPort int64  `json:"internal_port"`
+}
+
+func (q *Queries) ListVerifiedProxyRoutes(ctx context.Context) ([]ListVerifiedProxyRoutesRow, error) {
+	rows, err := q.query(ctx, q.listVerifiedProxyRoutesStmt, listVerifiedProxyRoutes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVerifiedProxyRoutesRow
+	for rows.Next() {
+		var i ListVerifiedProxyRoutesRow
+		if err := rows.Scan(&i.Hostname, &i.AppID, &i.InternalPort); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAppStatus = `-- name: UpdateAppStatus :exec
 update apps
 set status = ?, updated_at = current_timestamp

@@ -90,6 +90,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listProjectsStmt, err = db.PrepareContext(ctx, listProjects); err != nil {
 		return nil, fmt.Errorf("error preparing query ListProjects: %w", err)
 	}
+	if q.listVerifiedProxyRoutesStmt, err = db.PrepareContext(ctx, listVerifiedProxyRoutes); err != nil {
+		return nil, fmt.Errorf("error preparing query ListVerifiedProxyRoutes: %w", err)
+	}
 	if q.updateAppStatusStmt, err = db.PrepareContext(ctx, updateAppStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateAppStatus: %w", err)
 	}
@@ -214,6 +217,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listProjectsStmt: %w", cerr)
 		}
 	}
+	if q.listVerifiedProxyRoutesStmt != nil {
+		if cerr := q.listVerifiedProxyRoutesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listVerifiedProxyRoutesStmt: %w", cerr)
+		}
+	}
 	if q.updateAppStatusStmt != nil {
 		if cerr := q.updateAppStatusStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateAppStatusStmt: %w", cerr)
@@ -266,63 +274,65 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                         DBTX
-	tx                         *sql.Tx
-	createAppStmt              *sql.Stmt
-	createDeploymentStmt       *sql.Stmt
-	createDomainStmt           *sql.Stmt
-	createProjectStmt          *sql.Stmt
-	createTokenStmt            *sql.Stmt
-	createUserStmt             *sql.Stmt
-	deleteAppStmt              *sql.Stmt
-	deleteDomainStmt           *sql.Stmt
-	deleteEnvVarStmt           *sql.Stmt
-	deleteProjectStmt          *sql.Stmt
-	getAppStmt                 *sql.Stmt
-	getDeploymentStmt          *sql.Stmt
-	getDomainByHostnameStmt    *sql.Stmt
-	getProjectStmt             *sql.Stmt
-	getTokenByHashStmt         *sql.Stmt
-	getUserByEmailStmt         *sql.Stmt
-	listAppsStmt               *sql.Stmt
-	listAppsByProjectStmt      *sql.Stmt
-	listDeploymentsByAppStmt   *sql.Stmt
-	listDomainsByAppStmt       *sql.Stmt
-	listEnvVarsByAppStmt       *sql.Stmt
-	listProjectsStmt           *sql.Stmt
-	updateAppStatusStmt        *sql.Stmt
-	updateDeploymentStatusStmt *sql.Stmt
-	upsertEnvVarStmt           *sql.Stmt
+	db                          DBTX
+	tx                          *sql.Tx
+	createAppStmt               *sql.Stmt
+	createDeploymentStmt        *sql.Stmt
+	createDomainStmt            *sql.Stmt
+	createProjectStmt           *sql.Stmt
+	createTokenStmt             *sql.Stmt
+	createUserStmt              *sql.Stmt
+	deleteAppStmt               *sql.Stmt
+	deleteDomainStmt            *sql.Stmt
+	deleteEnvVarStmt            *sql.Stmt
+	deleteProjectStmt           *sql.Stmt
+	getAppStmt                  *sql.Stmt
+	getDeploymentStmt           *sql.Stmt
+	getDomainByHostnameStmt     *sql.Stmt
+	getProjectStmt              *sql.Stmt
+	getTokenByHashStmt          *sql.Stmt
+	getUserByEmailStmt          *sql.Stmt
+	listAppsStmt                *sql.Stmt
+	listAppsByProjectStmt       *sql.Stmt
+	listDeploymentsByAppStmt    *sql.Stmt
+	listDomainsByAppStmt        *sql.Stmt
+	listEnvVarsByAppStmt        *sql.Stmt
+	listProjectsStmt            *sql.Stmt
+	listVerifiedProxyRoutesStmt *sql.Stmt
+	updateAppStatusStmt         *sql.Stmt
+	updateDeploymentStatusStmt  *sql.Stmt
+	upsertEnvVarStmt            *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                         tx,
-		tx:                         tx,
-		createAppStmt:              q.createAppStmt,
-		createDeploymentStmt:       q.createDeploymentStmt,
-		createDomainStmt:           q.createDomainStmt,
-		createProjectStmt:          q.createProjectStmt,
-		createTokenStmt:            q.createTokenStmt,
-		createUserStmt:             q.createUserStmt,
-		deleteAppStmt:              q.deleteAppStmt,
-		deleteDomainStmt:           q.deleteDomainStmt,
-		deleteEnvVarStmt:           q.deleteEnvVarStmt,
-		deleteProjectStmt:          q.deleteProjectStmt,
-		getAppStmt:                 q.getAppStmt,
-		getDeploymentStmt:          q.getDeploymentStmt,
-		getDomainByHostnameStmt:    q.getDomainByHostnameStmt,
-		getProjectStmt:             q.getProjectStmt,
-		getTokenByHashStmt:         q.getTokenByHashStmt,
-		getUserByEmailStmt:         q.getUserByEmailStmt,
-		listAppsStmt:               q.listAppsStmt,
-		listAppsByProjectStmt:      q.listAppsByProjectStmt,
-		listDeploymentsByAppStmt:   q.listDeploymentsByAppStmt,
-		listDomainsByAppStmt:       q.listDomainsByAppStmt,
-		listEnvVarsByAppStmt:       q.listEnvVarsByAppStmt,
-		listProjectsStmt:           q.listProjectsStmt,
-		updateAppStatusStmt:        q.updateAppStatusStmt,
-		updateDeploymentStatusStmt: q.updateDeploymentStatusStmt,
-		upsertEnvVarStmt:           q.upsertEnvVarStmt,
+		db:                          tx,
+		tx:                          tx,
+		createAppStmt:               q.createAppStmt,
+		createDeploymentStmt:        q.createDeploymentStmt,
+		createDomainStmt:            q.createDomainStmt,
+		createProjectStmt:           q.createProjectStmt,
+		createTokenStmt:             q.createTokenStmt,
+		createUserStmt:              q.createUserStmt,
+		deleteAppStmt:               q.deleteAppStmt,
+		deleteDomainStmt:            q.deleteDomainStmt,
+		deleteEnvVarStmt:            q.deleteEnvVarStmt,
+		deleteProjectStmt:           q.deleteProjectStmt,
+		getAppStmt:                  q.getAppStmt,
+		getDeploymentStmt:           q.getDeploymentStmt,
+		getDomainByHostnameStmt:     q.getDomainByHostnameStmt,
+		getProjectStmt:              q.getProjectStmt,
+		getTokenByHashStmt:          q.getTokenByHashStmt,
+		getUserByEmailStmt:          q.getUserByEmailStmt,
+		listAppsStmt:                q.listAppsStmt,
+		listAppsByProjectStmt:       q.listAppsByProjectStmt,
+		listDeploymentsByAppStmt:    q.listDeploymentsByAppStmt,
+		listDomainsByAppStmt:        q.listDomainsByAppStmt,
+		listEnvVarsByAppStmt:        q.listEnvVarsByAppStmt,
+		listProjectsStmt:            q.listProjectsStmt,
+		listVerifiedProxyRoutesStmt: q.listVerifiedProxyRoutesStmt,
+		updateAppStatusStmt:         q.updateAppStatusStmt,
+		updateDeploymentStatusStmt:  q.updateDeploymentStatusStmt,
+		upsertEnvVarStmt:            q.upsertEnvVarStmt,
 	}
 }
