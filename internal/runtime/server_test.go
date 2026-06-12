@@ -20,7 +20,11 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "porter.db")
 
-	db, handler, err := runtime.NewHandler(ctx, config.Config{DatabasePath: dbPath, PublicIP: "203.0.113.42"})
+	db, handler, err := runtime.NewHandlerWithOptions(ctx, config.Config{DatabasePath: dbPath, PublicIP: "203.0.113.42"}, runtime.Options{
+		Resolver: fakeResolver{
+			"custom.example.com": []string{"203.0.113.42"},
+		},
+	})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
 	}
@@ -86,4 +90,19 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 	if len(domains) != 1 || domains[0].Hostname != "web.203-0-113-42.sslip.io" {
 		t.Fatalf("domains = %#v", domains)
 	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/apps/"+app.ID+"/domains", bytes.NewBufferString(`{"hostname":"custom.example.com"}`))
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("custom domain status = %d, want %d; body=%s", rr.Code, http.StatusCreated, rr.Body.String())
+	}
+}
+
+type fakeResolver map[string][]string
+
+func (resolver fakeResolver) LookupHost(_ context.Context, hostname string) ([]string, error) {
+	return resolver[hostname], nil
 }

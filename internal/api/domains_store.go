@@ -1,0 +1,86 @@
+package api
+
+import (
+	"context"
+	"fmt"
+	"net"
+
+	"github.com/6space7/porter/internal/proxy"
+	"github.com/6space7/porter/internal/store"
+)
+
+type StoreDomainServiceOptions struct {
+	Resolver    proxy.Resolver
+	ServerIP    string
+	NewDomainID func() string
+}
+
+type storeDomainService struct {
+	queries     *store.Queries
+	resolver    proxy.Resolver
+	serverIP    string
+	newDomainID func() string
+}
+
+func NewStoreDomainService(queries *store.Queries, opts StoreDomainServiceOptions) DomainService {
+	resolver := opts.Resolver
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
+	newDomainID := opts.NewDomainID
+	if newDomainID == nil {
+		newDomainID = func() string {
+			return randomPrefixedID("dom")
+		}
+	}
+	return storeDomainService{
+		queries:     queries,
+		resolver:    resolver,
+		serverIP:    opts.ServerIP,
+		newDomainID: newDomainID,
+	}
+}
+
+func (service storeDomainService) AddCustomDomain(ctx context.Context, appID, hostname string) (DomainResponse, error) {
+	if service.serverIP == "" {
+		return DomainResponse{}, fmt.Errorf("server public IP is required for domain preflight")
+	}
+	if err := proxy.PreflightCustomDomain(ctx, service.resolver, hostname, service.serverIP); err != nil {
+		return DomainResponse{}, err
+	}
+
+	domain, err := service.queries.CreateDomain(ctx, store.CreateDomainParams{
+		ID:       service.newDomainID(),
+		AppID:    appID,
+		Hostname: hostname,
+		Type:     "custom",
+		Verified: 1,
+	})
+	if err != nil {
+		return DomainResponse{}, err
+	}
+	return domainResponse(domain), nil
+}
+
+func (service storeDomainService) ListDomains(ctx context.Context, appID string) ([]DomainResponse, error) {
+	domains, err := service.queries.ListDomainsByApp(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
+	responses := make([]DomainResponse, 0, len(domains))
+	for _, domain := range domains {
+		responses = append(responses, domainResponse(domain))
+	}
+	return responses, nil
+}
+
+func domainResponse(domain store.Domain) DomainResponse {
+	return DomainResponse{
+		ID:       domain.ID,
+		AppID:    domain.AppID,
+		Hostname: domain.Hostname,
+		Type:     domain.Type,
+		Verified: domain.Verified == 1,
+	}
+}
