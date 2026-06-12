@@ -175,7 +175,7 @@
   }
 
   async function rollback(deploymentID: string) {
-    if (!app || !window.confirm('Roll back to this deployment image?')) return
+    if (!app) return
     await run(async () => {
       await api.rollback(app.id, deploymentID)
       await onChanged()
