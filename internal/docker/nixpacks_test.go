@@ -10,7 +10,7 @@ import (
 	dockerstage "github.com/6space7/porter/internal/docker"
 )
 
-func TestNixpacksCLIBuildsImageWithDockerizedNixpacks(t *testing.T) {
+func TestNixpacksCLIBuildsImageWithHostCLI(t *testing.T) {
 	runner := &fakeCommandRunner{output: "nixpacks built\n"}
 	backend := dockerstage.NixpacksCLI{Runner: runner}
 
@@ -22,17 +22,11 @@ func TestNixpacksCLIBuildsImageWithDockerizedNixpacks(t *testing.T) {
 	if log != "nixpacks built\n" {
 		t.Fatalf("log = %q", log)
 	}
-	if runner.name != "docker" {
-		t.Fatalf("command = %q, want docker", runner.name)
+	if runner.name != "nixpacks" {
+		t.Fatalf("command = %q, want nixpacks", runner.name)
 	}
 	wantArgs := []string{
-		"run",
-		"--rm",
-		"-v", "/var/run/docker.sock:/var/run/docker.sock",
-		"-v", "/var/lib/porter/work/app/source:/app",
-		"-w", "/app",
-		"ghcr.io/railwayapp/nixpacks:latest",
-		"build", "/app", "--name", "porter/app:dep",
+		"build", "/var/lib/porter/work/app/source", "--name", "porter/app:dep",
 	}
 	if !reflect.DeepEqual(runner.args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", runner.args, wantArgs)

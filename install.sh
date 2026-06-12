@@ -120,6 +120,14 @@ install_go_if_missing() {
 	ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 }
 
+install_nixpacks_if_missing() {
+	if command -v nixpacks >/dev/null 2>&1; then
+		return
+	fi
+
+	curl -fsSL https://nixpacks.com/install.sh | bash
+}
+
 ensure_directories() {
 	install -d -m 0755 "${PORTER_CONFIG_DIR}"
 	install -d -m 0755 "${PORTER_DATA_DIR}"
@@ -266,6 +274,7 @@ main() {
 	install_docker_if_missing
 	ensure_docker_running
 	install_go_if_missing
+	install_nixpacks_if_missing
 	ensure_directories
 	ensure_master_key
 	write_env_file
