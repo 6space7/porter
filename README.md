@@ -22,14 +22,15 @@ The product is built phase by phase from the project brief:
 
 ## Status
 
-Phases 0 through 3 are complete and verified on a fresh Ubuntu VPS. The current
+Phases 0 through 4 are complete and verified on a fresh Ubuntu VPS. The current
 binary provides the core JSON API, SQLite store, scoped bearer-token auth,
 Docker deployment pipeline, Dockerfile `EXPOSE` port detection, managed Caddy
 routing, stored build logs, runtime log streaming, deployment history with
 one-click rollback/image retention, source install, secure secret handling, and
-an embedded Svelte web UI for the core one-server workflows. Remaining phases
-add the service catalog/Nixpacks, MCP, multi-server deploys, GitHub
-auto-deploy, and release lifecycle automation.
+an embedded Svelte web UI for the core one-server workflows. It also supports
+Dockerfile-less Nixpacks builds, service catalog templates, internal service
+attachment, and public HTTPS service routes. Remaining phases add MCP,
+multi-server deploys, GitHub auto-deploy, and release lifecycle automation.
 
 Verified on 2026-06-12:
 
@@ -51,11 +52,19 @@ Verified on 2026-06-12:
   and older deployment records are kept without rollback image tags.
 - API and browser rollback checks deploy a working v1, deploy an intentionally
   broken v2, and restore v1 without a rebuild.
+- Dockerfile-less Node apps fall back to Nixpacks, build on the VPS, persist
+  `build_type=nixpacks`, and serve HTTPS traffic on generated app domains.
+- the service catalog exposes PostgreSQL, MySQL, Redis, MongoDB, n8n, Uptime
+  Kuma, WordPress, Ghost, MinIO, and Plausible templates through the API/UI.
+- an internal PostgreSQL service can be created, attached to an app as
+  `DATABASE_URL`, and reached from the deployed app container.
+- an exposed n8n service receives a generated sslip.io hostname and serves the
+  editor over HTTPS through Caddy.
 
 Local browser checks also cover the embedded UI login/logout flow, apps
 dashboard, app creation form, app detail actions, domains, environment editor,
-deployment/log panes, token settings, services placeholder, and desktop/mobile
-layouts.
+deployment/log panes, token settings, services catalog/running/attach views,
+and desktop/mobile layouts.
 
 ## Web UI
 
@@ -91,6 +100,7 @@ The installer:
 
 - installs Docker if it is missing;
 - installs Go 1.25 or newer from the official Go distribution when needed;
+- installs Nixpacks when it is missing;
 - writes config under `/etc/porter`;
 - writes runtime data under `/var/lib/porter`;
 - creates `/etc/porter/master.key` with `0600` permissions;

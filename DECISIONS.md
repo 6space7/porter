@@ -40,3 +40,16 @@ This log records product and engineering decisions that are not already fixed by
   rollback.
 - Phase 3 verification covers both API and browser paths: deploy a working v1,
   deploy a broken v2, then roll back to v1 without running a new Docker build.
+- Nixpacks runs as a host CLI installed by `install.sh`, because the published
+  Nixpacks container image is not a drop-in `nixpacks build` command runner.
+- Dockerfile builds fall back to Nixpacks only when no Dockerfile exists, and a
+  successful fallback persists the app `build_type` as `nixpacks`.
+- Service containers stay non-privileged but use Docker's default capability
+  set; dropping all capabilities prevented official database images such as
+  PostgreSQL from switching to their runtime user.
+- Public service hostnames share the same Caddy route source as verified app
+  domains, and Caddy's TLS ask endpoint authorizes that combined proxy route
+  set.
+- Deployment failures caused by request cancellation are still persisted as
+  failed deployment records so history does not get stuck at `running` with no
+  image tag.

@@ -60,6 +60,25 @@ app, prunes older images from Docker, and clears old deployment `image_tag`
 values so the API/UI can show history without advertising unavailable rollback
 targets.
 
+When an app is explicitly set to `nixpacks`, or when a Dockerfile app has no
+Dockerfile in the cloned source, the deployment builder shells out to the host
+`nixpacks` CLI and records the detected build type. The installer provisions
+Nixpacks on Debian/Ubuntu hosts so Dockerfile-less apps can build on fresh VPS
+installs.
+
+The service catalog is embedded from `templates/*.yaml`. Creating a service
+renders template variables, generates required secrets, encrypts generated
+outputs in SQLite, pulls the service image, creates named Docker volumes, and
+runs the service container on the shared `porter-proxy` network. Internal
+services expose their container DNS name to attached apps through generated env
+vars such as `DATABASE_URL`; exposed services also receive generated sslip.io
+hostnames and are included in Caddy route reconciliation.
+
+Caddy's on-demand TLS ask endpoint allows the same verified proxy route set
+used for config generation: verified app domains, the platform domain, and
+exposed service hostnames. Internal service hostnames are not authorized for
+public TLS.
+
 Production source installs use:
 
 - `/etc/porter` for config and the master key;
