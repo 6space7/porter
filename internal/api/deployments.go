@@ -54,7 +54,7 @@ func (handler deploymentHandler) deploy(w http.ResponseWriter, r *http.Request) 
 	}
 
 	deployment, err := handler.deployments.DeployApp(r.Context(), appID)
-	if err != nil {
+	if err != nil && deployment.ID == "" {
 		WriteError(w, http.StatusInternalServerError, "internal_error", "Deployment could not be started.", "Try again or check deployment logs.", nil)
 		return
 	}

@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -64,6 +65,38 @@ func TestListDeploymentsRequiresReadScope(t *testing.T) {
 	}
 }
 
+func TestDeployRouteReturnsFailedDeploymentWithBuildLog(t *testing.T) {
+	deployments := newFakeDeploymentService()
+	deployments.deployErr = errors.New("docker build failed")
+	deployments.deployResponse = api.DeploymentResponse{
+		ID:       "dep_1",
+		AppID:    "app_1",
+		Status:   "failed",
+		Stage:    "building",
+		BuildLog: "error: docker build failed\n",
+	}
+	router := api.NewRouterWithDeps(api.Dependencies{
+		TokenVerifier: deployTestVerifier(),
+		Deployments:   deployments,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/apps/app_1/deploy", nil)
+	req.Header.Set("Authorization", "Bearer deploy-token")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("deploy status = %d, want %d; body=%s", rr.Code, http.StatusAccepted, rr.Body.String())
+	}
+	var deployment api.DeploymentResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &deployment); err != nil {
+		t.Fatalf("decode deployment: %v", err)
+	}
+	if deployment.Status != "failed" || deployment.Stage != "building" || deployment.BuildLog == "" {
+		t.Fatalf("deployment = %#v", deployment)
+	}
+}
+
 func deployTestVerifier() api.TokenVerifier {
 	return api.TokenVerifierFunc(func(_ context.Context, token string) (api.Principal, error) {
 		switch token {
@@ -82,7 +115,9 @@ func deployTestVerifier() api.TokenVerifier {
 }
 
 type fakeDeploymentService struct {
-	deployments []api.DeploymentResponse
+	deployments    []api.DeploymentResponse
+	deployResponse api.DeploymentResponse
+	deployErr      error
 }
 
 func newFakeDeploymentService() *fakeDeploymentService {
@@ -90,6 +125,12 @@ func newFakeDeploymentService() *fakeDeploymentService {
 }
 
 func (svc *fakeDeploymentService) DeployApp(_ context.Context, appID string) (api.DeploymentResponse, error) {
+	if svc.deployResponse.ID != "" || svc.deployErr != nil {
+		if svc.deployResponse.AppID == "" {
+			svc.deployResponse.AppID = appID
+		}
+		return svc.deployResponse, svc.deployErr
+	}
 	deployment := api.DeploymentResponse{ID: "dep_1", AppID: appID, Status: "running", Stage: "queued"}
 	svc.deployments = append(svc.deployments, deployment)
 	return deployment, nil
