@@ -73,6 +73,9 @@ func TestDockerCaddyRuntimeEnsuresCaddyContainer(t *testing.T) {
 	if !containsString(client.hostConfig.CapDrop, "ALL") {
 		t.Fatalf("cap drop = %#v", client.hostConfig.CapDrop)
 	}
+	if !containsString(client.hostConfig.CapAdd, "NET_BIND_SERVICE") {
+		t.Fatalf("cap add = %#v", client.hostConfig.CapAdd)
+	}
 	if !containsString(client.hostConfig.SecurityOpt, "no-new-privileges:true") {
 		t.Fatalf("security opts = %#v", client.hostConfig.SecurityOpt)
 	}

@@ -87,6 +87,7 @@ func (runtime *DockerCaddyRuntime) EnsureCaddy(ctx context.Context, spec CaddyCo
 		},
 		Privileged: false,
 		CapDrop:    []string{"ALL"},
+		CapAdd:     []string{"NET_BIND_SERVICE"},
 		SecurityOpt: []string{
 			"no-new-privileges:true",
 		},
