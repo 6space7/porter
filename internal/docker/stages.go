@@ -1,0 +1,140 @@
+package docker
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/6space7/porter/internal/deploy"
+)
+
+const (
+	defaultMemoryBytes = int64(512 * 1024 * 1024)
+	defaultNanoCPUs    = int64(1_000_000_000)
+)
+
+type ImageBackend interface {
+	BuildImage(ctx context.Context, sourceDir, imageTag string) (string, error)
+}
+
+type ContainerBackend interface {
+	EnsureNetwork(ctx context.Context, name string) error
+	ReplaceContainer(ctx context.Context, spec ContainerSpec) (string, error)
+}
+
+type ContainerSpec struct {
+	Name         string
+	ImageTag     string
+	NetworkName  string
+	InternalPort int64
+	Env          []string
+	Privileged   bool
+	CapDrop      []string
+	MemoryBytes  int64
+	NanoCPUs     int64
+}
+
+type Builder struct {
+	Images ImageBackend
+}
+
+func (builder Builder) Build(ctx context.Context, req deploy.BuildRequest) (deploy.BuildResult, error) {
+	if req.SourceDir == "" {
+		return deploy.BuildResult{}, fmt.Errorf("source dir is required")
+	}
+	if builder.Images == nil {
+		return deploy.BuildResult{}, fmt.Errorf("image backend is required")
+	}
+
+	imageTag := ImageTag(req.AppID, req.DeploymentID)
+	log, err := builder.Images.BuildImage(ctx, req.SourceDir, imageTag)
+	if err != nil {
+		return deploy.BuildResult{ImageTag: imageTag, Log: log}, err
+	}
+	return deploy.BuildResult{ImageTag: imageTag, Log: log}, nil
+}
+
+type Runner struct {
+	Containers ContainerBackend
+}
+
+func (runner Runner) Run(ctx context.Context, req deploy.RunRequest) (string, error) {
+	if runner.Containers == nil {
+		return "", fmt.Errorf("container backend is required")
+	}
+	if req.ImageTag == "" {
+		return "", fmt.Errorf("image tag is required")
+	}
+
+	networkName := NetworkName(req.AppID)
+	if err := runner.Containers.EnsureNetwork(ctx, networkName); err != nil {
+		return "", err
+	}
+
+	internalPort := req.InternalPort
+	if internalPort == 0 {
+		internalPort = 3000
+	}
+	return runner.Containers.ReplaceContainer(ctx, ContainerSpec{
+		Name:         ContainerName(req.AppID),
+		ImageTag:     req.ImageTag,
+		NetworkName:  networkName,
+		InternalPort: internalPort,
+		Env:          envList(req.Env),
+		Privileged:   false,
+		CapDrop:      []string{"ALL"},
+		MemoryBytes:  defaultMemoryBytes,
+		NanoCPUs:     defaultNanoCPUs,
+	})
+}
+
+func ImageTag(appID, deploymentID string) string {
+	return "porter/" + sanitizeDockerName(appID) + ":" + sanitizeDockerName(deploymentID)
+}
+
+func ContainerName(appID string) string {
+	return "porter-" + sanitizeDockerName(appID)
+}
+
+func NetworkName(appID string) string {
+	return "porter-" + sanitizeDockerName(appID)
+}
+
+func envList(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(env))
+	for key := range env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, key+"="+env[key])
+	}
+	return out
+}
+
+func sanitizeDockerName(value string) string {
+	value = strings.ToLower(value)
+	var out strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			out.WriteRune(r)
+		case r >= '0' && r <= '9':
+			out.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			out.WriteRune(r)
+		default:
+			out.WriteRune('-')
+		}
+	}
+	if out.Len() == 0 {
+		return "unknown"
+	}
+	return out.String()
+}
