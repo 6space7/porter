@@ -68,6 +68,9 @@ func toCaddyAdminConfig(config CaddyConfig) map[string]any {
 	}
 
 	return map[string]any{
+		"admin": map[string]any{
+			"listen": "0.0.0.0:2019",
+		},
 		"apps": map[string]any{
 			"http": map[string]any{
 				"servers": map[string]any{

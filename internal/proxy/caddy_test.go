@@ -42,6 +42,10 @@ func TestCaddyAdminClientAppliesConfigToAdminAPI(t *testing.T) {
 	}
 
 	apps := body["apps"].(map[string]any)
+	adminConfig := body["admin"].(map[string]any)
+	if adminConfig["listen"] != "0.0.0.0:2019" {
+		t.Fatalf("admin config = %#v", adminConfig)
+	}
 	httpApp := apps["http"].(map[string]any)
 	servers := httpApp["servers"].(map[string]any)
 	porter := servers["porter"].(map[string]any)
