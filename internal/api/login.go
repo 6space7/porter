@@ -18,6 +18,7 @@ var ErrInvalidLogin = errors.New("invalid login")
 type AuthService interface {
 	Login(ctx context.Context, email, password string) (LoginResponse, error)
 	Logout(ctx context.Context, tokenID string) error
+	CreateToken(ctx context.Context, name string, scopes []string) (CreateTokenResponse, error)
 }
 
 type LoginResponse struct {
@@ -26,9 +27,21 @@ type LoginResponse struct {
 	Scopes  []string `json:"scopes"`
 }
 
+type CreateTokenResponse struct {
+	Token   string   `json:"token"`
+	TokenID string   `json:"token_id"`
+	Name    string   `json:"name"`
+	Scopes  []string `json:"scopes"`
+}
+
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type createTokenRequest struct {
+	Name   string   `json:"name"`
+	Scopes []string `json:"scopes"`
 }
 
 type authHandler struct {
@@ -43,6 +56,7 @@ func mountAuthRoutes(router chi.Router, auth AuthService) {
 func mountAuthSessionRoutes(router chi.Router, auth AuthService) {
 	handler := authHandler{auth: auth}
 	router.Delete("/auth/session", handler.logout)
+	router.With(RequireScope("tokens:write")).Post("/auth/tokens", handler.createToken)
 }
 
 func (handler authHandler) login(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +94,27 @@ func (handler authHandler) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler authHandler) createToken(w http.ResponseWriter, r *http.Request) {
+	var req createTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON.", "Send an object with token name and scopes.", nil)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	scopes, ok := normalizeRequestedScopes(req.Scopes)
+	if name == "" || !ok {
+		WriteError(w, http.StatusBadRequest, "invalid_token", "Token name and scopes are invalid.", "Send a non-empty name and known scopes.", nil)
+		return
+	}
+
+	response, err := handler.auth.CreateToken(r.Context(), name, scopes)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "internal_error", "Token could not be created.", "Try again or check server logs.", nil)
+		return
+	}
+	writeJSON(w, http.StatusCreated, response)
 }
 
 type storeAuthService struct {
@@ -126,6 +161,47 @@ func (service storeAuthService) Logout(ctx context.Context, tokenID string) erro
 	return service.queries.DeleteToken(ctx, tokenID)
 }
 
+func (service storeAuthService) CreateToken(ctx context.Context, name string, scopes []string) (CreateTokenResponse, error) {
+	plaintext, record, err := auth.NewToken(name, scopes)
+	if err != nil {
+		return CreateTokenResponse{}, err
+	}
+	if _, err := service.queries.CreateToken(ctx, store.CreateTokenParams{
+		ID:     record.ID,
+		Name:   record.Name,
+		Hash:   record.Hash,
+		Scopes: strings.Join(record.Scopes, ","),
+	}); err != nil {
+		return CreateTokenResponse{}, err
+	}
+	return CreateTokenResponse{
+		Token:   plaintext,
+		TokenID: record.ID,
+		Name:    record.Name,
+		Scopes:  record.Scopes,
+	}, nil
+}
+
 func AdminScopes() []string {
-	return []string{"projects:read", "projects:write", "apps:read", "apps:write", "apps:deploy"}
+	return []string{"projects:read", "projects:write", "apps:read", "apps:write", "apps:deploy", "tokens:write"}
+}
+
+func normalizeRequestedScopes(input []string) ([]string, bool) {
+	allowed := map[string]bool{}
+	for _, scope := range AdminScopes() {
+		allowed[scope] = true
+	}
+	scopes := make([]string, 0, len(input))
+	seen := map[string]bool{}
+	for _, raw := range input {
+		scope := strings.TrimSpace(raw)
+		if scope == "" || !allowed[scope] {
+			return nil, false
+		}
+		if !seen[scope] {
+			scopes = append(scopes, scope)
+			seen[scope] = true
+		}
+	}
+	return scopes, len(scopes) > 0
 }

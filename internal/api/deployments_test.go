@@ -73,6 +73,8 @@ func deployTestVerifier() api.TokenVerifier {
 			return api.Principal{TokenID: "tok_deploy", Scopes: []string{"apps:read", "apps:deploy"}}, nil
 		case "deploy-only-token":
 			return api.Principal{TokenID: "tok_deploy_only", Scopes: []string{"apps:deploy"}}, nil
+		case "token-writer":
+			return api.Principal{TokenID: "tok_writer", Scopes: []string{"tokens:write"}}, nil
 		default:
 			return api.Principal{}, api.ErrInvalidToken
 		}

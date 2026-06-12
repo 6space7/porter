@@ -112,6 +112,36 @@ func TestStoreAuthServiceLogoutDeletesToken(t *testing.T) {
 	}
 }
 
+func TestStoreAuthServiceCreateTokenStoresHashOnly(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, store.Config{Path: filepath.Join(t.TempDir(), "porter.db")})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	queries := store.New(db.SQL())
+	service := api.NewStoreAuthService(queries)
+	response, err := service.CreateToken(ctx, "reader", []string{"apps:read"})
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	if response.Token == "" || response.TokenID == "" || response.Name != "reader" {
+		t.Fatalf("response = %#v", response)
+	}
+	record, err := queries.GetTokenByHash(ctx, auth.HashToken(response.Token))
+	if err != nil {
+		t.Fatalf("get token by hash: %v", err)
+	}
+	if record.Hash == response.Token || strings.Contains(record.Hash, "ptr_") {
+		t.Fatalf("stored hash leaked token: %q", record.Hash)
+	}
+	if record.Scopes != "apps:read" {
+		t.Fatalf("stored scopes = %q", record.Scopes)
+	}
+}
+
 func hasScope(scopes []string, want string) bool {
 	for _, scope := range scopes {
 		if scope == want {
