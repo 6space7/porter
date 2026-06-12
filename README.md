@@ -44,16 +44,23 @@ The installer:
 - creates `/etc/porter/master.key` with `0600` permissions;
 - builds `/usr/local/bin/porter` from source;
 - creates and starts `porter.service`;
-- prints an initial bearer token and stores it once at `/etc/porter/initial-token`.
+- prints an initial admin password and stores it once at `/etc/porter/initial-password`.
 
-Save the initial token, then remove `/etc/porter/initial-token`.
+Save the initial password, then remove `/etc/porter/initial-password`.
 
 ## API Smoke Test
 
 ```bash
-TOKEN="$(sudo cat /etc/porter/initial-token)"
+PASSWORD="$(sudo cat /etc/porter/initial-password)"
 
 curl http://127.0.0.1:8080/health
+
+TOKEN="$(
+  curl -sS -H "Content-Type: application/json" \
+    -d "{\"email\":\"admin@porter.local\",\"password\":\"${PASSWORD}\"}" \
+    http://127.0.0.1:8080/api/v1/auth/login |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])'
+)"
 
 curl -sS -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \

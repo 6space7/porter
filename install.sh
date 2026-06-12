@@ -6,8 +6,10 @@ PORTER_DATA_DIR="/var/lib/porter"
 PORTER_WORKSPACE_DIR="${PORTER_DATA_DIR}/work"
 PORTER_ENV_FILE="${PORTER_CONFIG_DIR}/porter.env"
 PORTER_MASTER_KEY="${PORTER_CONFIG_DIR}/master.key"
+PORTER_INITIAL_PASSWORD="${PORTER_CONFIG_DIR}/initial-password"
 PORTER_BINARY="/usr/local/bin/porter"
 PORTER_SERVICE="/etc/systemd/system/porter.service"
+PORTER_ADMIN_EMAIL="${PORTER_ADMIN_EMAIL:-admin@porter.local}"
 
 require_root() {
 	if [[ "${EUID}" -ne 0 ]]; then
@@ -77,12 +79,8 @@ ensure_master_key() {
 	chmod 0600 "${PORTER_MASTER_KEY}"
 }
 
-new_token() {
-	printf 'ptr_%s' "$(openssl rand -base64 32 | tr -d '+/=' | head -c 43)"
-}
-
-sha256_hex() {
-	printf '%s' "$1" | sha256sum | awk '{print $1}'
+new_password() {
+	openssl rand -base64 24 | tr -d '\n'
 }
 
 detect_public_ip() {
@@ -94,8 +92,7 @@ detect_public_ip() {
 }
 
 write_env_file() {
-	local bootstrap_token=""
-	local bootstrap_hash=""
+	local bootstrap_password=""
 	local public_ip=""
 
 	if [[ -f "${PORTER_ENV_FILE}" ]]; then
@@ -103,8 +100,7 @@ write_env_file() {
 		return
 	fi
 
-	bootstrap_token="$(new_token)"
-	bootstrap_hash="$(sha256_hex "${bootstrap_token}")"
+	bootstrap_password="$(new_password)"
 	public_ip="$(detect_public_ip)"
 
 	{
@@ -113,16 +109,17 @@ write_env_file() {
 		echo "PORTER_WORKSPACE_PATH=${PORTER_WORKSPACE_DIR}"
 		echo "PORTER_CADDY_ASK_URL=http://127.0.0.1:8080/api/v1/caddy/ask"
 		echo "PORTER_MANAGE_CADDY=true"
-		echo "PORTER_BOOTSTRAP_TOKEN_HASH=${bootstrap_hash}"
 		echo "PORTER_MASTER_KEY_PATH=${PORTER_MASTER_KEY}"
+		echo "PORTER_BOOTSTRAP_ADMIN_EMAIL=${PORTER_ADMIN_EMAIL}"
+		echo "PORTER_BOOTSTRAP_ADMIN_PASSWORD_FILE=${PORTER_INITIAL_PASSWORD}"
 		if [[ -n "${public_ip}" ]]; then
 			echo "PORTER_PUBLIC_IP=${public_ip}"
 		fi
 	} > "${PORTER_ENV_FILE}"
 	chmod 0600 "${PORTER_ENV_FILE}"
 
-	echo "${bootstrap_token}" > "${PORTER_CONFIG_DIR}/initial-token"
-	chmod 0600 "${PORTER_CONFIG_DIR}/initial-token"
+	echo "${bootstrap_password}" > "${PORTER_INITIAL_PASSWORD}"
+	chmod 0600 "${PORTER_INITIAL_PASSWORD}"
 }
 
 build_binary() {
@@ -163,17 +160,17 @@ start_service() {
 }
 
 print_summary() {
-	local token_file="${PORTER_CONFIG_DIR}/initial-token"
 	echo
 	echo "porter is installed."
 	echo "API: http://127.0.0.1:8080"
-	if [[ -f "${token_file}" ]]; then
-		echo "Initial bearer token:"
-		cat "${token_file}"
+	if [[ -f "${PORTER_INITIAL_PASSWORD}" ]]; then
+		echo "Initial admin email: ${PORTER_ADMIN_EMAIL}"
+		echo "Initial admin password:"
+		cat "${PORTER_INITIAL_PASSWORD}"
 		echo
-		echo "The token is stored once at ${token_file}; remove that file after saving the token."
+		echo "The password is stored once at ${PORTER_INITIAL_PASSWORD}; remove that file after saving the password."
 	else
-		echo "Existing install detected; no initial token was generated."
+		echo "Existing install detected; no initial password was generated."
 	fi
 }
 

@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/6space7/porter/internal/api"
+	"github.com/6space7/porter/internal/auth"
 	"github.com/6space7/porter/internal/config"
 	secretcrypto "github.com/6space7/porter/internal/crypto"
 	"github.com/6space7/porter/internal/deploy"
@@ -58,6 +60,10 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		_ = db.Close()
 		return nil, nil, err
 	}
+	if err := bootstrapAdminUser(ctx, queries, cfg.BootstrapAdminEmail, cfg.BootstrapAdminPasswordFile); err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
 	caddyAdmin := opts.CaddyAdmin
 	if cfg.ManageCaddy {
 		caddyRuntime := opts.CaddyRuntime
@@ -94,6 +100,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		Runner:  chooseRunner(opts.Runner, defaultStages.Runner),
 	}
 	handler := api.NewRouterWithDeps(api.Dependencies{
+		Auth:          api.NewStoreAuthService(queries),
 		TokenVerifier: api.NewStoreTokenVerifier(queries),
 		Projects:      api.NewStoreProjectService(queries, nil),
 		Apps: api.NewStoreAppServiceWithOptions(queries, api.StoreAppServiceOptions{
@@ -109,6 +116,44 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		CaddyAsk:    api.NewStoreCaddyAskService(queries),
 	})
 	return db, handler, nil
+}
+
+func bootstrapAdminUser(ctx context.Context, queries *store.Queries, email, passwordFile string) error {
+	email = strings.TrimSpace(email)
+	passwordFile = strings.TrimSpace(passwordFile)
+	if passwordFile == "" {
+		return nil
+	}
+	if email == "" {
+		return fmt.Errorf("bootstrap admin email is required")
+	}
+	if _, err := queries.GetUserByEmail(ctx, email); err == nil {
+		return nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+
+	raw, err := os.ReadFile(passwordFile)
+	if err != nil {
+		return fmt.Errorf("read bootstrap admin password: %w", err)
+	}
+	password := strings.TrimSpace(string(raw))
+	if password == "" {
+		return fmt.Errorf("bootstrap admin password is empty")
+	}
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("hash bootstrap admin password: %w", err)
+	}
+	_, err = queries.CreateUser(ctx, store.CreateUserParams{
+		ID:           "usr_admin",
+		Email:        email,
+		PasswordHash: hash,
+	})
+	if err != nil {
+		return fmt.Errorf("create bootstrap admin user: %w", err)
+	}
+	return nil
 }
 
 type deploymentStages struct {

@@ -7,6 +7,7 @@ import (
 )
 
 type Dependencies struct {
+	Auth          AuthService
 	TokenVerifier TokenVerifier
 	Projects      ProjectService
 	Apps          AppService
@@ -28,29 +29,34 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 		mountCaddyAskRoutes(router, deps.CaddyAsk)
 	}
 
-	if deps.TokenVerifier != nil {
-		router.Route("/api/v1", func(r chi.Router) {
-			r.Use(RequireBearerToken(deps.TokenVerifier))
-			if deps.Projects != nil {
-				mountProjectRoutes(r, deps.Projects)
-			}
-			if deps.Apps != nil {
-				mountAppRoutes(r, deps.Apps)
-			}
-			if deps.Domains != nil {
-				mountDomainRoutes(r, deps.Domains)
-			}
-			if deps.EnvVars != nil {
-				mountEnvVarRoutes(r, deps.EnvVars)
-			}
-			if deps.Deployments != nil {
-				mountDeploymentRoutes(r, deps.Deployments)
-			}
-			if deps.Logs != nil {
-				mountLogRoutes(r, deps.Logs)
-			}
-		})
-	}
+	router.Route("/api/v1", func(r chi.Router) {
+		if deps.Auth != nil {
+			mountAuthRoutes(r, deps.Auth)
+		}
+		if deps.TokenVerifier != nil {
+			r.Group(func(protected chi.Router) {
+				protected.Use(RequireBearerToken(deps.TokenVerifier))
+				if deps.Projects != nil {
+					mountProjectRoutes(protected, deps.Projects)
+				}
+				if deps.Apps != nil {
+					mountAppRoutes(protected, deps.Apps)
+				}
+				if deps.Domains != nil {
+					mountDomainRoutes(protected, deps.Domains)
+				}
+				if deps.EnvVars != nil {
+					mountEnvVarRoutes(protected, deps.EnvVars)
+				}
+				if deps.Deployments != nil {
+					mountDeploymentRoutes(protected, deps.Deployments)
+				}
+				if deps.Logs != nil {
+					mountLogRoutes(protected, deps.Logs)
+				}
+			})
+		}
+	})
 
 	return router
 }

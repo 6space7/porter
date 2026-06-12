@@ -52,3 +52,17 @@ func TestLoadReadsBootstrapTokenHash(t *testing.T) {
 		t.Fatalf("bootstrap token hash = %q", cfg.BootstrapTokenHash)
 	}
 }
+
+func TestLoadReadsBootstrapAdminPasswordFile(t *testing.T) {
+	t.Setenv("PORTER_BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
+	t.Setenv("PORTER_BOOTSTRAP_ADMIN_PASSWORD_FILE", "/etc/porter/initial-password")
+
+	cfg := config.Load()
+
+	if cfg.BootstrapAdminEmail != "admin@example.com" {
+		t.Fatalf("bootstrap admin email = %q", cfg.BootstrapAdminEmail)
+	}
+	if cfg.BootstrapAdminPasswordFile != "/etc/porter/initial-password" {
+		t.Fatalf("bootstrap admin password file = %q", cfg.BootstrapAdminPasswordFile)
+	}
+}
