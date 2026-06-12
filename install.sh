@@ -47,7 +47,7 @@ require_supported_platform() {
 
 install_base_packages() {
 	apt-get update
-	apt-get install -y ca-certificates curl git openssl
+	apt-get install -y ca-certificates curl git openssl tar
 }
 
 install_docker_if_missing() {
@@ -61,6 +61,63 @@ install_docker_if_missing() {
 
 ensure_docker_running() {
 	systemctl enable --now docker
+}
+
+go_version_ok() {
+	if ! command -v go >/dev/null 2>&1; then
+		return 1
+	fi
+
+	local version major minor
+	version="$(go env GOVERSION 2>/dev/null || true)"
+	version="${version#go}"
+	major="${version%%.*}"
+	minor="${version#*.}"
+	minor="${minor%%.*}"
+	if [[ -z "${major}" || -z "${minor}" ]]; then
+		return 1
+	fi
+	if (( major > 1 )); then
+		return 0
+	fi
+	[[ "${major}" == "1" && "${minor}" -ge 25 ]]
+}
+
+go_arch() {
+	case "$(uname -m)" in
+		x86_64|amd64)
+			printf 'amd64'
+			;;
+		aarch64|arm64)
+			printf 'arm64'
+			;;
+		*)
+			echo "unsupported Go architecture: $(uname -m)" >&2
+			exit 1
+			;;
+	esac
+}
+
+install_go_if_missing() {
+	if go_version_ok; then
+		return
+	fi
+
+	local version arch archive url tmp
+	version="${PORTER_GO_VERSION:-}"
+	if [[ -z "${version}" ]]; then
+		version="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1)"
+	fi
+	arch="$(go_arch)"
+	archive="${version}.linux-${arch}.tar.gz"
+	url="https://go.dev/dl/${archive}"
+	tmp="/tmp/${archive}"
+
+	curl -fsSL "${url}" -o "${tmp}"
+	rm -rf /usr/local/go
+	tar -C /usr/local -xzf "${tmp}"
+	ln -sf /usr/local/go/bin/go /usr/local/bin/go
+	ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 }
 
 ensure_directories() {
@@ -138,7 +195,7 @@ write_env_file() {
 
 build_binary() {
 	if ! command -v go >/dev/null 2>&1; then
-		echo "Go is required to build porter from source. Install Go 1.25 or newer, then rerun this installer." >&2
+		echo "Go is required to build porter from source and could not be installed." >&2
 		exit 1
 	fi
 
@@ -207,6 +264,7 @@ main() {
 	install_base_packages
 	install_docker_if_missing
 	ensure_docker_running
+	install_go_if_missing
 	ensure_directories
 	ensure_master_key
 	write_env_file

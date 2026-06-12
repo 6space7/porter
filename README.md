@@ -29,8 +29,7 @@ part of Phase 1.
 
 ## Source Install
 
-Run from a checked-out repository on a Debian or Ubuntu amd64/arm64 server with
-Go 1.25 or newer installed:
+Run from a checked-out repository on a Debian or Ubuntu amd64/arm64 server:
 
 ```bash
 sudo ./install.sh
@@ -39,6 +38,7 @@ sudo ./install.sh
 The installer:
 
 - installs Docker if it is missing;
+- installs Go 1.25 or newer from the official Go distribution when needed;
 - writes config under `/etc/porter`;
 - writes runtime data under `/var/lib/porter`;
 - creates `/etc/porter/master.key` with `0600` permissions;

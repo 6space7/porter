@@ -22,3 +22,6 @@ This log records product and engineering decisions that are not already fixed by
 - Docker image builds inspect the JSON build stream for embedded `error`
   events; the Docker SDK can return a successful API response while the build
   itself failed.
+- Until release binaries exist, the installer builds from source and installs a
+  supported Go toolchain from the official Go distribution when the host has no
+  suitable Go version.
