@@ -21,6 +21,8 @@ func TestDomainRoutesRequireAuthAndScopes(t *testing.T) {
 
 	assertStatusAndCode(t, router, http.MethodGet, "/api/v1/apps/app_1/domains", "", http.StatusUnauthorized, "unauthorized")
 	assertStatusAndCode(t, router, http.MethodPost, "/api/v1/apps/app_1/domains", "Bearer read-token", http.StatusForbidden, "forbidden")
+	assertStatusAndCode(t, router, http.MethodDelete, "/api/v1/apps/app_1/domains/dom_1", "Bearer read-token", http.StatusForbidden, "forbidden")
+	assertStatusAndCode(t, router, http.MethodPost, "/api/v1/apps/app_1/domains/dom_1/verify", "Bearer read-token", http.StatusForbidden, "forbidden")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/apps/app_1/domains", bytes.NewBufferString(`{"hostname":"app.example.com"}`))
 	req.Header.Set("Authorization", "Bearer write-token")
@@ -53,6 +55,49 @@ func TestDomainRoutesRequireAuthAndScopes(t *testing.T) {
 	}
 	if len(listed) != 1 || listed[0].ID != "dom_1" {
 		t.Fatalf("listed domains = %#v", listed)
+	}
+}
+
+func TestDomainDeleteAndVerifyRoutes(t *testing.T) {
+	domains := newFakeDomainService()
+	domains.domains = []api.DomainResponse{{
+		ID:       "dom_1",
+		AppID:    "app_1",
+		Hostname: "app.example.com",
+		Type:     "custom",
+		Verified: false,
+	}}
+	router := api.NewRouterWithDeps(api.Dependencies{
+		TokenVerifier: appTestVerifier(),
+		Domains:       domains,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/apps/app_1/domains/dom_1/verify", nil)
+	req.Header.Set("Authorization", "Bearer write-token")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("verify domain status = %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	var verified api.DomainResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &verified); err != nil {
+		t.Fatalf("decode verified domain: %v", err)
+	}
+	if !verified.Verified || verified.ID != "dom_1" {
+		t.Fatalf("verified domain = %#v", verified)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/apps/app_1/domains/dom_1", nil)
+	req.Header.Set("Authorization", "Bearer write-token")
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete domain status = %d, want %d; body=%s", rr.Code, http.StatusNoContent, rr.Body.String())
+	}
+	if len(domains.domains) != 0 {
+		t.Fatalf("domains after delete = %#v", domains.domains)
 	}
 }
 
@@ -97,6 +142,7 @@ func TestCreateDomainReturnsStructuredDNSPreflightError(t *testing.T) {
 type fakeDomainService struct {
 	domains   []api.DomainResponse
 	createErr error
+	verifyErr error
 }
 
 func newFakeDomainService() *fakeDomainService {
@@ -120,4 +166,27 @@ func (svc *fakeDomainService) AddCustomDomain(_ context.Context, appID, hostname
 
 func (svc *fakeDomainService) ListDomains(_ context.Context, _ string) ([]api.DomainResponse, error) {
 	return append([]api.DomainResponse(nil), svc.domains...), nil
+}
+
+func (svc *fakeDomainService) DeleteDomain(_ context.Context, appID, domainID string) error {
+	for i, domain := range svc.domains {
+		if domain.AppID == appID && domain.ID == domainID {
+			svc.domains = append(svc.domains[:i], svc.domains[i+1:]...)
+			return nil
+		}
+	}
+	return api.ErrNotFound
+}
+
+func (svc *fakeDomainService) VerifyDomain(_ context.Context, appID, domainID string) (api.DomainResponse, error) {
+	if svc.verifyErr != nil {
+		return api.DomainResponse{}, svc.verifyErr
+	}
+	for i, domain := range svc.domains {
+		if domain.AppID == appID && domain.ID == domainID {
+			svc.domains[i].Verified = true
+			return svc.domains[i], nil
+		}
+	}
+	return api.DomainResponse{}, api.ErrNotFound
 }

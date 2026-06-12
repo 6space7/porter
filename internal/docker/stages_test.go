@@ -111,6 +111,25 @@ func TestRuntimeLogsStreamsSanitizedAppContainerLogs(t *testing.T) {
 	}
 }
 
+func TestAppControllerUsesSanitizedContainerNames(t *testing.T) {
+	containers := &fakeLifecycleBackend{}
+	controller := dockerstage.AppController{Containers: containers}
+
+	if err := controller.StopApp(context.Background(), "App 1"); err != nil {
+		t.Fatalf("stop app: %v", err)
+	}
+	if err := controller.StartApp(context.Background(), "App 1"); err != nil {
+		t.Fatalf("start app: %v", err)
+	}
+	if err := controller.RemoveApp(context.Background(), "App 1"); err != nil {
+		t.Fatalf("remove app: %v", err)
+	}
+
+	if containers.stopped != "porter-app-1" || containers.started != "porter-app-1" || containers.removed != "porter-app-1" {
+		t.Fatalf("lifecycle names = start:%q stop:%q remove:%q", containers.started, containers.stopped, containers.removed)
+	}
+}
+
 func TestProxyNetworkNameMatchesManagedCaddyNetwork(t *testing.T) {
 	if got := dockerstage.ProxyNetworkName(); got != "porter-proxy" {
 		t.Fatalf("proxy network name = %q, want porter-proxy", got)
@@ -155,4 +174,25 @@ type fakeRuntimeLogBackend struct {
 func (backend *fakeRuntimeLogBackend) StreamContainerLogs(_ context.Context, containerName string) (io.ReadCloser, error) {
 	backend.containerName = containerName
 	return backend.stream, nil
+}
+
+type fakeLifecycleBackend struct {
+	started string
+	stopped string
+	removed string
+}
+
+func (backend *fakeLifecycleBackend) StartContainer(_ context.Context, containerName string) error {
+	backend.started = containerName
+	return nil
+}
+
+func (backend *fakeLifecycleBackend) StopContainer(_ context.Context, containerName string) error {
+	backend.stopped = containerName
+	return nil
+}
+
+func (backend *fakeLifecycleBackend) RemoveContainer(_ context.Context, containerName string) error {
+	backend.removed = containerName
+	return nil
 }

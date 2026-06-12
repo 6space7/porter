@@ -26,6 +26,7 @@ type dockerClient interface {
 	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
 	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
 	ContainerStart(ctx context.Context, containerID string, options container.StartOptions) error
+	ContainerStop(ctx context.Context, containerID string, options container.StopOptions) error
 	ContainerLogs(ctx context.Context, containerID string, options container.LogsOptions) (io.ReadCloser, error)
 }
 
@@ -133,6 +134,45 @@ func (backend *SDKBackend) ReplaceContainer(ctx context.Context, spec ContainerS
 		return "", fmt.Errorf("start container: %w", err)
 	}
 	return fmt.Sprintf("container %s started\n", created.ID), nil
+}
+
+func (backend *SDKBackend) StartContainer(ctx context.Context, containerName string) error {
+	if backend == nil || backend.client == nil {
+		return fmt.Errorf("docker client is required")
+	}
+	if containerName == "" {
+		return fmt.Errorf("container name is required")
+	}
+	if err := backend.client.ContainerStart(ctx, containerName, container.StartOptions{}); err != nil {
+		return fmt.Errorf("start container: %w", err)
+	}
+	return nil
+}
+
+func (backend *SDKBackend) StopContainer(ctx context.Context, containerName string) error {
+	if backend == nil || backend.client == nil {
+		return fmt.Errorf("docker client is required")
+	}
+	if containerName == "" {
+		return fmt.Errorf("container name is required")
+	}
+	if err := backend.client.ContainerStop(ctx, containerName, container.StopOptions{}); err != nil {
+		return fmt.Errorf("stop container: %w", err)
+	}
+	return nil
+}
+
+func (backend *SDKBackend) RemoveContainer(ctx context.Context, containerName string) error {
+	if backend == nil || backend.client == nil {
+		return fmt.Errorf("docker client is required")
+	}
+	if containerName == "" {
+		return fmt.Errorf("container name is required")
+	}
+	if err := backend.client.ContainerRemove(ctx, containerName, container.RemoveOptions{Force: true}); err != nil && !errdefs.IsNotFound(err) {
+		return fmt.Errorf("remove container: %w", err)
+	}
+	return nil
 }
 
 func (backend *SDKBackend) StreamContainerLogs(ctx context.Context, containerName string) (io.ReadCloser, error) {

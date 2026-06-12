@@ -2,7 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+)
+
+var (
+	ErrNotFound              = errors.New("not found")
+	ErrInvalidRollbackTarget = errors.New("invalid rollback target")
 )
 
 type ErrorEnvelope struct {

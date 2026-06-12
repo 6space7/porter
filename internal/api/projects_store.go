@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 
 	"github.com/6space7/porter/internal/store"
@@ -49,6 +51,32 @@ func (service storeProjectService) ListProjects(ctx context.Context) ([]ProjectR
 	return responses, nil
 }
 
+func (service storeProjectService) GetProject(ctx context.Context, id string) (ProjectResponse, error) {
+	project, err := service.queries.GetProject(ctx, id)
+	if err != nil {
+		return ProjectResponse{}, mapStoreNotFound(err)
+	}
+	return projectResponse(project), nil
+}
+
+func (service storeProjectService) UpdateProject(ctx context.Context, id, name string) (ProjectResponse, error) {
+	project, err := service.queries.UpdateProjectName(ctx, store.UpdateProjectNameParams{
+		Name: name,
+		ID:   id,
+	})
+	if err != nil {
+		return ProjectResponse{}, mapStoreNotFound(err)
+	}
+	return projectResponse(project), nil
+}
+
+func (service storeProjectService) DeleteProject(ctx context.Context, id string) error {
+	if _, err := service.queries.GetProject(ctx, id); err != nil {
+		return mapStoreNotFound(err)
+	}
+	return service.queries.DeleteProject(ctx, id)
+}
+
 func projectResponse(project store.Project) ProjectResponse {
 	return ProjectResponse{
 		ID:   project.ID,
@@ -62,4 +90,11 @@ func randomPrefixedID(prefix string) string {
 		panic(fmt.Sprintf("generate %s id: %v", prefix, err))
 	}
 	return prefix + "_" + base64.RawURLEncoding.EncodeToString(raw[:])
+}
+
+func mapStoreNotFound(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
 }

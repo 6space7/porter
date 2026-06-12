@@ -173,6 +173,49 @@ func TestPipelineUsesDetectedDockerfilePortForRunner(t *testing.T) {
 	}
 }
 
+func TestPipelineRollbackRunsExistingImageAndRecordsStages(t *testing.T) {
+	store := &fakeDeploymentStore{}
+	pipeline := deploy.Pipeline{
+		Store: store,
+		Runner: deploy.RunnerFunc(func(_ context.Context, req deploy.RunRequest) (string, error) {
+			if req.DeploymentID != "dep_1" || req.ImageTag != "porter/app_1:dep_previous" {
+				t.Fatalf("run request = %#v", req)
+			}
+			if req.InternalPort != 8080 || req.Env["DATABASE_URL"] != "postgres://internal" {
+				t.Fatalf("run request env/port = %#v", req)
+			}
+			return "rolled back\n", nil
+		}),
+	}
+
+	result, err := pipeline.Rollback(context.Background(), deploy.RollbackRequest{
+		AppID:              "app_1",
+		TargetDeploymentID: "dep_previous",
+		ImageTag:           "porter/app_1:dep_previous",
+		InternalPort:       8080,
+		Env:                map[string]string{"DATABASE_URL": "postgres://internal"},
+	})
+	if err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	if result.ID != "dep_1" || result.Status != deploy.StatusRunning || result.Stage != deploy.StageRunning {
+		t.Fatalf("result = %#v", result)
+	}
+	if !strings.Contains(result.BuildLog, "rollback to dep_previous") || !strings.Contains(result.BuildLog, "rolled back") {
+		t.Fatalf("build log = %q", result.BuildLog)
+	}
+
+	gotStages := store.stages()
+	wantStages := []deploy.Stage{
+		deploy.StageQueued,
+		deploy.StageStarting,
+		deploy.StageRunning,
+	}
+	if !reflect.DeepEqual(gotStages, wantStages) {
+		t.Fatalf("stages = %#v, want %#v", gotStages, wantStages)
+	}
+}
+
 type fakeDeploymentStore struct {
 	records []deploy.DeploymentRecord
 }

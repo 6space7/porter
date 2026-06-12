@@ -319,6 +319,26 @@ func (q *Queries) GetDeployment(ctx context.Context, id string) (Deployment, err
 	return i, err
 }
 
+const getDomain = `-- name: GetDomain :one
+select id, app_id, hostname, type, verified, created_at
+from domains
+where id = ?
+`
+
+func (q *Queries) GetDomain(ctx context.Context, id string) (Domain, error) {
+	row := q.queryRow(ctx, q.getDomainStmt, getDomain, id)
+	var i Domain
+	err := row.Scan(
+		&i.ID,
+		&i.AppID,
+		&i.Hostname,
+		&i.Type,
+		&i.Verified,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getDomainByHostname = `-- name: GetDomainByHostname :one
 select id, app_id, hostname, type, verified, created_at
 from domains
@@ -662,20 +682,52 @@ func (q *Queries) ListVerifiedProxyRoutes(ctx context.Context) ([]ListVerifiedPr
 	return items, nil
 }
 
-const updateAppStatus = `-- name: UpdateAppStatus :exec
+const updateApp = `-- name: UpdateApp :one
 update apps
-set status = ?, updated_at = current_timestamp
+set
+	name = ?,
+	git_url = ?,
+	branch = ?,
+	build_type = ?,
+	internal_port = ?,
+	updated_at = current_timestamp
 where id = ?
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at
 `
 
-type UpdateAppStatusParams struct {
-	Status string `json:"status"`
-	ID     string `json:"id"`
+type UpdateAppParams struct {
+	Name         string `json:"name"`
+	GitUrl       string `json:"git_url"`
+	Branch       string `json:"branch"`
+	BuildType    string `json:"build_type"`
+	InternalPort int64  `json:"internal_port"`
+	ID           string `json:"id"`
 }
 
-func (q *Queries) UpdateAppStatus(ctx context.Context, arg UpdateAppStatusParams) error {
-	_, err := q.exec(ctx, q.updateAppStatusStmt, updateAppStatus, arg.Status, arg.ID)
-	return err
+func (q *Queries) UpdateApp(ctx context.Context, arg UpdateAppParams) (App, error) {
+	row := q.queryRow(ctx, q.updateAppStmt, updateApp,
+		arg.Name,
+		arg.GitUrl,
+		arg.Branch,
+		arg.BuildType,
+		arg.InternalPort,
+		arg.ID,
+	)
+	var i App
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ServerID,
+		&i.Name,
+		&i.GitUrl,
+		&i.Branch,
+		&i.BuildType,
+		&i.InternalPort,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateAppInternalPort = `-- name: UpdateAppInternalPort :exec
@@ -691,6 +743,22 @@ type UpdateAppInternalPortParams struct {
 
 func (q *Queries) UpdateAppInternalPort(ctx context.Context, arg UpdateAppInternalPortParams) error {
 	_, err := q.exec(ctx, q.updateAppInternalPortStmt, updateAppInternalPort, arg.InternalPort, arg.ID)
+	return err
+}
+
+const updateAppStatus = `-- name: UpdateAppStatus :exec
+update apps
+set status = ?, updated_at = current_timestamp
+where id = ?
+`
+
+type UpdateAppStatusParams struct {
+	Status string `json:"status"`
+	ID     string `json:"id"`
+}
+
+func (q *Queries) UpdateAppStatus(ctx context.Context, arg UpdateAppStatusParams) error {
+	_, err := q.exec(ctx, q.updateAppStatusStmt, updateAppStatus, arg.Status, arg.ID)
 	return err
 }
 
@@ -717,6 +785,56 @@ func (q *Queries) UpdateDeploymentStatus(ctx context.Context, arg UpdateDeployme
 		arg.ID,
 	)
 	return err
+}
+
+const updateDomainVerified = `-- name: UpdateDomainVerified :one
+update domains
+set verified = ?
+where id = ?
+returning id, app_id, hostname, type, verified, created_at
+`
+
+type UpdateDomainVerifiedParams struct {
+	Verified int64  `json:"verified"`
+	ID       string `json:"id"`
+}
+
+func (q *Queries) UpdateDomainVerified(ctx context.Context, arg UpdateDomainVerifiedParams) (Domain, error) {
+	row := q.queryRow(ctx, q.updateDomainVerifiedStmt, updateDomainVerified, arg.Verified, arg.ID)
+	var i Domain
+	err := row.Scan(
+		&i.ID,
+		&i.AppID,
+		&i.Hostname,
+		&i.Type,
+		&i.Verified,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateProjectName = `-- name: UpdateProjectName :one
+update projects
+set name = ?, updated_at = current_timestamp
+where id = ?
+returning id, name, created_at, updated_at
+`
+
+type UpdateProjectNameParams struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNameParams) (Project, error) {
+	row := q.queryRow(ctx, q.updateProjectNameStmt, updateProjectName, arg.Name, arg.ID)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const upsertEnvVar = `-- name: UpsertEnvVar :one

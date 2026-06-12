@@ -32,6 +32,15 @@ type Request struct {
 	Secrets      []string
 }
 
+type RollbackRequest struct {
+	AppID              string
+	TargetDeploymentID string
+	ImageTag           string
+	InternalPort       int64
+	Env                map[string]string
+	Secrets            []string
+}
+
 type DeploymentRecord struct {
 	ID           string
 	AppID        string
@@ -178,6 +187,39 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 	}
 
 	if err := pipeline.mark(ctx, &record, StatusRunning, StageRunning, RedactSecrets(logs.String(), req.Secrets), buildResult.ImageTag); err != nil {
+		return record, err
+	}
+	return record, nil
+}
+
+func (pipeline Pipeline) Rollback(ctx context.Context, req RollbackRequest) (DeploymentRecord, error) {
+	if req.ImageTag == "" {
+		return DeploymentRecord{}, fmt.Errorf("rollback image tag is required")
+	}
+
+	record, err := pipeline.Store.CreateDeployment(ctx, req.AppID)
+	if err != nil {
+		return DeploymentRecord{}, err
+	}
+
+	var logs strings.Builder
+	logs.WriteString(fmt.Sprintf("rollback to %s\n", req.TargetDeploymentID))
+	if err := pipeline.mark(ctx, &record, StatusRunning, StageStarting, RedactSecrets(logs.String(), req.Secrets), req.ImageTag); err != nil {
+		return record, err
+	}
+	runLog, err := pipeline.Runner.Run(ctx, RunRequest{
+		AppID:        req.AppID,
+		DeploymentID: record.ID,
+		ImageTag:     req.ImageTag,
+		InternalPort: req.InternalPort,
+		Env:          copyEnv(req.Env),
+	})
+	logs.WriteString(runLog)
+	if err != nil {
+		return pipeline.fail(ctx, record, StageStarting, logs.String(), req.Secrets, err)
+	}
+
+	if err := pipeline.mark(ctx, &record, StatusRunning, StageRunning, RedactSecrets(logs.String(), req.Secrets), req.ImageTag); err != nil {
 		return record, err
 	}
 	return record, nil

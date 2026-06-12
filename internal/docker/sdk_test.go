@@ -18,6 +18,7 @@ import (
 func TestSDKBackendImplementsStageBackends(t *testing.T) {
 	var _ dockerstage.ImageBackend = (*dockerstage.SDKBackend)(nil)
 	var _ dockerstage.ContainerBackend = (*dockerstage.SDKBackend)(nil)
+	var _ dockerstage.LifecycleBackend = (*dockerstage.SDKBackend)(nil)
 }
 
 func TestSDKBackendBuildImageSendsTaggedDockerBuild(t *testing.T) {
@@ -142,6 +143,39 @@ func TestSDKBackendEnsureNetworkIgnoresExistingNetwork(t *testing.T) {
 	}
 }
 
+func TestSDKBackendControlsExistingContainers(t *testing.T) {
+	client := &fakeDockerClient{}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	if err := backend.StopContainer(context.Background(), "porter-app_1"); err != nil {
+		t.Fatalf("stop container: %v", err)
+	}
+	if err := backend.StartContainer(context.Background(), "porter-app_1"); err != nil {
+		t.Fatalf("start container: %v", err)
+	}
+	if err := backend.RemoveContainer(context.Background(), "porter-app_1"); err != nil {
+		t.Fatalf("remove container: %v", err)
+	}
+
+	if client.stoppedID != "porter-app_1" || client.startedID != "porter-app_1" || client.removedName != "porter-app_1" {
+		t.Fatalf("container calls = stop:%q start:%q remove:%q", client.stoppedID, client.startedID, client.removedName)
+	}
+	if !client.removeOptions.Force {
+		t.Fatalf("remove options = %#v", client.removeOptions)
+	}
+}
+
+func TestSDKBackendRemoveContainerIgnoresMissingContainer(t *testing.T) {
+	client := &fakeDockerClient{
+		removeError: errdefs.NotFound(errors.New("no such container")),
+	}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	if err := backend.RemoveContainer(context.Background(), "porter-app_1"); err != nil {
+		t.Fatalf("remove missing container: %v", err)
+	}
+}
+
 func TestSDKBackendStreamsContainerLogs(t *testing.T) {
 	client := &fakeDockerClient{
 		logsResponse: io.NopCloser(strings.NewReader(multiplexedStdout("runtime line\n"))),
@@ -180,6 +214,7 @@ type fakeDockerClient struct {
 	createdName   string
 	createID      string
 	startedID     string
+	stoppedID     string
 
 	containerConfig container.Config
 	hostConfig      container.HostConfig
@@ -219,6 +254,11 @@ func (client *fakeDockerClient) ContainerCreate(_ context.Context, config *conta
 
 func (client *fakeDockerClient) ContainerStart(_ context.Context, containerID string, _ container.StartOptions) error {
 	client.startedID = containerID
+	return nil
+}
+
+func (client *fakeDockerClient) ContainerStop(_ context.Context, containerID string, _ container.StopOptions) error {
+	client.stoppedID = containerID
 	return nil
 }
 

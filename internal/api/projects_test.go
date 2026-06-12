@@ -20,6 +20,8 @@ func TestProjectRoutesRequireAuthAndScopes(t *testing.T) {
 
 	assertStatusAndCode(t, router, http.MethodGet, "/api/v1/projects", "", http.StatusUnauthorized, "unauthorized")
 	assertStatusAndCode(t, router, http.MethodPost, "/api/v1/projects", "Bearer read-token", http.StatusForbidden, "forbidden")
+	assertStatusAndCode(t, router, http.MethodPatch, "/api/v1/projects/proj_1", "Bearer read-token", http.StatusForbidden, "forbidden")
+	assertStatusAndCode(t, router, http.MethodDelete, "/api/v1/projects/proj_1", "Bearer read-token", http.StatusForbidden, "forbidden")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewBufferString(`{"name":"demo"}`))
 	req.Header.Set("Authorization", "Bearer write-token")
@@ -52,6 +54,58 @@ func TestProjectRoutesRequireAuthAndScopes(t *testing.T) {
 	}
 	if len(listed) != 1 || listed[0].ID != "proj_1" {
 		t.Fatalf("listed projects = %#v", listed)
+	}
+}
+
+func TestProjectDetailUpdateAndDeleteRoutes(t *testing.T) {
+	projects := newFakeProjectService()
+	projects.projects = []api.ProjectResponse{{ID: "proj_1", Name: "demo"}}
+	router := api.NewRouterWithDeps(api.Dependencies{
+		TokenVerifier: testVerifier(),
+		Projects:      projects,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/proj_1", nil)
+	req.Header.Set("Authorization", "Bearer read-token")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get project status = %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	var project api.ProjectResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &project); err != nil {
+		t.Fatalf("decode project: %v", err)
+	}
+	if project.ID != "proj_1" || project.Name != "demo" {
+		t.Fatalf("project = %#v", project)
+	}
+
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/projects/proj_1", bytes.NewBufferString(`{"name":"renamed"}`))
+	req.Header.Set("Authorization", "Bearer write-token")
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("update project status = %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &project); err != nil {
+		t.Fatalf("decode updated project: %v", err)
+	}
+	if project.Name != "renamed" {
+		t.Fatalf("updated project = %#v", project)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/projects/proj_1", nil)
+	req.Header.Set("Authorization", "Bearer write-token")
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete project status = %d, want %d; body=%s", rr.Code, http.StatusNoContent, rr.Body.String())
+	}
+	if len(projects.projects) != 0 {
+		t.Fatalf("projects after delete = %#v", projects.projects)
 	}
 }
 
@@ -112,4 +166,33 @@ func (svc *fakeProjectService) CreateProject(_ context.Context, name string) (ap
 
 func (svc *fakeProjectService) ListProjects(_ context.Context) ([]api.ProjectResponse, error) {
 	return append([]api.ProjectResponse(nil), svc.projects...), nil
+}
+
+func (svc *fakeProjectService) GetProject(_ context.Context, id string) (api.ProjectResponse, error) {
+	for _, project := range svc.projects {
+		if project.ID == id {
+			return project, nil
+		}
+	}
+	return api.ProjectResponse{}, api.ErrNotFound
+}
+
+func (svc *fakeProjectService) UpdateProject(_ context.Context, id, name string) (api.ProjectResponse, error) {
+	for i, project := range svc.projects {
+		if project.ID == id {
+			svc.projects[i].Name = name
+			return svc.projects[i], nil
+		}
+	}
+	return api.ProjectResponse{}, api.ErrNotFound
+}
+
+func (svc *fakeProjectService) DeleteProject(_ context.Context, id string) error {
+	for i, project := range svc.projects {
+		if project.ID == id {
+			svc.projects = append(svc.projects[:i], svc.projects[i+1:]...)
+			return nil
+		}
+	}
+	return api.ErrNotFound
 }

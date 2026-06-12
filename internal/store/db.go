@@ -63,6 +63,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getDeploymentStmt, err = db.PrepareContext(ctx, getDeployment); err != nil {
 		return nil, fmt.Errorf("error preparing query GetDeployment: %w", err)
 	}
+	if q.getDomainStmt, err = db.PrepareContext(ctx, getDomain); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDomain: %w", err)
+	}
 	if q.getDomainByHostnameStmt, err = db.PrepareContext(ctx, getDomainByHostname); err != nil {
 		return nil, fmt.Errorf("error preparing query GetDomainByHostname: %w", err)
 	}
@@ -96,14 +99,23 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listVerifiedProxyRoutesStmt, err = db.PrepareContext(ctx, listVerifiedProxyRoutes); err != nil {
 		return nil, fmt.Errorf("error preparing query ListVerifiedProxyRoutes: %w", err)
 	}
-	if q.updateAppStatusStmt, err = db.PrepareContext(ctx, updateAppStatus); err != nil {
-		return nil, fmt.Errorf("error preparing query UpdateAppStatus: %w", err)
+	if q.updateAppStmt, err = db.PrepareContext(ctx, updateApp); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateApp: %w", err)
 	}
 	if q.updateAppInternalPortStmt, err = db.PrepareContext(ctx, updateAppInternalPort); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateAppInternalPort: %w", err)
 	}
+	if q.updateAppStatusStmt, err = db.PrepareContext(ctx, updateAppStatus); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateAppStatus: %w", err)
+	}
 	if q.updateDeploymentStatusStmt, err = db.PrepareContext(ctx, updateDeploymentStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateDeploymentStatus: %w", err)
+	}
+	if q.updateDomainVerifiedStmt, err = db.PrepareContext(ctx, updateDomainVerified); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateDomainVerified: %w", err)
+	}
+	if q.updateProjectNameStmt, err = db.PrepareContext(ctx, updateProjectName); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateProjectName: %w", err)
 	}
 	if q.upsertEnvVarStmt, err = db.PrepareContext(ctx, upsertEnvVar); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertEnvVar: %w", err)
@@ -178,6 +190,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getDeploymentStmt: %w", cerr)
 		}
 	}
+	if q.getDomainStmt != nil {
+		if cerr := q.getDomainStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDomainStmt: %w", cerr)
+		}
+	}
 	if q.getDomainByHostnameStmt != nil {
 		if cerr := q.getDomainByHostnameStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getDomainByHostnameStmt: %w", cerr)
@@ -233,9 +250,9 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listVerifiedProxyRoutesStmt: %w", cerr)
 		}
 	}
-	if q.updateAppStatusStmt != nil {
-		if cerr := q.updateAppStatusStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing updateAppStatusStmt: %w", cerr)
+	if q.updateAppStmt != nil {
+		if cerr := q.updateAppStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateAppStmt: %w", cerr)
 		}
 	}
 	if q.updateAppInternalPortStmt != nil {
@@ -243,9 +260,24 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateAppInternalPortStmt: %w", cerr)
 		}
 	}
+	if q.updateAppStatusStmt != nil {
+		if cerr := q.updateAppStatusStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateAppStatusStmt: %w", cerr)
+		}
+	}
 	if q.updateDeploymentStatusStmt != nil {
 		if cerr := q.updateDeploymentStatusStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateDeploymentStatusStmt: %w", cerr)
+		}
+	}
+	if q.updateDomainVerifiedStmt != nil {
+		if cerr := q.updateDomainVerifiedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateDomainVerifiedStmt: %w", cerr)
+		}
+	}
+	if q.updateProjectNameStmt != nil {
+		if cerr := q.updateProjectNameStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateProjectNameStmt: %w", cerr)
 		}
 	}
 	if q.upsertEnvVarStmt != nil {
@@ -305,6 +337,7 @@ type Queries struct {
 	deleteTokenStmt             *sql.Stmt
 	getAppStmt                  *sql.Stmt
 	getDeploymentStmt           *sql.Stmt
+	getDomainStmt               *sql.Stmt
 	getDomainByHostnameStmt     *sql.Stmt
 	getProjectStmt              *sql.Stmt
 	getTokenByHashStmt          *sql.Stmt
@@ -316,9 +349,12 @@ type Queries struct {
 	listEnvVarsByAppStmt        *sql.Stmt
 	listProjectsStmt            *sql.Stmt
 	listVerifiedProxyRoutesStmt *sql.Stmt
+	updateAppStmt               *sql.Stmt
 	updateAppInternalPortStmt   *sql.Stmt
 	updateAppStatusStmt         *sql.Stmt
 	updateDeploymentStatusStmt  *sql.Stmt
+	updateDomainVerifiedStmt    *sql.Stmt
+	updateProjectNameStmt       *sql.Stmt
 	upsertEnvVarStmt            *sql.Stmt
 }
 
@@ -339,6 +375,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteTokenStmt:             q.deleteTokenStmt,
 		getAppStmt:                  q.getAppStmt,
 		getDeploymentStmt:           q.getDeploymentStmt,
+		getDomainStmt:               q.getDomainStmt,
 		getDomainByHostnameStmt:     q.getDomainByHostnameStmt,
 		getProjectStmt:              q.getProjectStmt,
 		getTokenByHashStmt:          q.getTokenByHashStmt,
@@ -350,9 +387,12 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listEnvVarsByAppStmt:        q.listEnvVarsByAppStmt,
 		listProjectsStmt:            q.listProjectsStmt,
 		listVerifiedProxyRoutesStmt: q.listVerifiedProxyRoutesStmt,
+		updateAppStmt:               q.updateAppStmt,
 		updateAppInternalPortStmt:   q.updateAppInternalPortStmt,
 		updateAppStatusStmt:         q.updateAppStatusStmt,
 		updateDeploymentStatusStmt:  q.updateDeploymentStatusStmt,
+		updateDomainVerifiedStmt:    q.updateDomainVerifiedStmt,
+		updateProjectNameStmt:       q.updateProjectNameStmt,
 		upsertEnvVarStmt:            q.upsertEnvVarStmt,
 	}
 }

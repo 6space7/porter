@@ -13,6 +13,12 @@ select id, name, created_at, updated_at
 from projects
 where id = ?;
 
+-- name: UpdateProjectName :one
+update projects
+set name = ?, updated_at = current_timestamp
+where id = ?
+returning id, name, created_at, updated_at;
+
 -- name: DeleteProject :exec
 delete from projects
 where id = ?;
@@ -58,6 +64,18 @@ update apps
 set internal_port = ?, updated_at = current_timestamp
 where id = ?;
 
+-- name: UpdateApp :one
+update apps
+set
+	name = ?,
+	git_url = ?,
+	branch = ?,
+	build_type = ?,
+	internal_port = ?,
+	updated_at = current_timestamp
+where id = ?
+returning id, project_id, server_id, name, git_url, branch, build_type, internal_port, status, created_at, updated_at;
+
 -- name: DeleteApp :exec
 delete from apps
 where id = ?;
@@ -71,6 +89,11 @@ returning id, app_id, hostname, type, verified, created_at;
 select id, app_id, hostname, type, verified, created_at
 from domains
 where hostname = ?;
+
+-- name: GetDomain :one
+select id, app_id, hostname, type, verified, created_at
+from domains
+where id = ?;
 
 -- name: ListDomainsByApp :many
 select id, app_id, hostname, type, verified, created_at
@@ -88,6 +111,12 @@ order by domains.hostname asc;
 -- name: DeleteDomain :exec
 delete from domains
 where id = ?;
+
+-- name: UpdateDomainVerified :one
+update domains
+set verified = ?
+where id = ?
+returning id, app_id, hostname, type, verified, created_at;
 
 -- name: CreateDeployment :one
 insert into deployments (id, app_id, status, stage, build_log, image_tag)

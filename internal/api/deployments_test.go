@@ -20,6 +20,7 @@ func TestDeploymentRoutesRequireAuthAndDeployScope(t *testing.T) {
 
 	assertStatusAndCode(t, router, http.MethodPost, "/api/v1/apps/app_1/deploy", "", http.StatusUnauthorized, "unauthorized")
 	assertStatusAndCode(t, router, http.MethodPost, "/api/v1/apps/app_1/deploy", "Bearer read-token", http.StatusForbidden, "forbidden")
+	assertStatusAndCode(t, router, http.MethodPost, "/api/v1/apps/app_1/deployments/dep_previous/rollback", "Bearer read-token", http.StatusForbidden, "forbidden")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/apps/app_1/deploy", nil)
 	req.Header.Set("Authorization", "Bearer deploy-token")
@@ -35,6 +36,21 @@ func TestDeploymentRoutesRequireAuthAndDeployScope(t *testing.T) {
 	}
 	if deployment.ID != "dep_1" || deployment.Status != "running" || deployment.Stage != "queued" {
 		t.Fatalf("deployment = %#v", deployment)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/apps/app_1/deployments/dep_1/rollback", nil)
+	req.Header.Set("Authorization", "Bearer deploy-token")
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("rollback status = %d, want %d; body=%s", rr.Code, http.StatusAccepted, rr.Body.String())
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &deployment); err != nil {
+		t.Fatalf("decode rollback deployment: %v", err)
+	}
+	if deployment.ID != "dep_rollback" || deployment.ImageTag != "porter/app_1:dep_1" {
+		t.Fatalf("rollback deployment = %#v", deployment)
 	}
 }
 
@@ -97,6 +113,35 @@ func TestDeployRouteReturnsFailedDeploymentWithBuildLog(t *testing.T) {
 	}
 }
 
+func TestRollbackRouteRejectsInvalidTarget(t *testing.T) {
+	deployments := newFakeDeploymentService()
+	deployments.rollbackErr = api.ErrInvalidRollbackTarget
+	router := api.NewRouterWithDeps(api.Dependencies{
+		TokenVerifier: deployTestVerifier(),
+		Deployments:   deployments,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/apps/app_1/deployments/dep_failed/rollback", nil)
+	req.Header.Set("Authorization", "Bearer deploy-token")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusBadRequest, rr.Body.String())
+	}
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if body.Error.Code != "invalid_rollback_target" {
+		t.Fatalf("error = %#v", body.Error)
+	}
+}
+
 func deployTestVerifier() api.TokenVerifier {
 	return api.TokenVerifierFunc(func(_ context.Context, token string) (api.Principal, error) {
 		switch token {
@@ -118,6 +163,7 @@ type fakeDeploymentService struct {
 	deployments    []api.DeploymentResponse
 	deployResponse api.DeploymentResponse
 	deployErr      error
+	rollbackErr    error
 }
 
 func newFakeDeploymentService() *fakeDeploymentService {
@@ -138,4 +184,20 @@ func (svc *fakeDeploymentService) DeployApp(_ context.Context, appID string) (ap
 
 func (svc *fakeDeploymentService) ListDeployments(_ context.Context, _ string) ([]api.DeploymentResponse, error) {
 	return append([]api.DeploymentResponse(nil), svc.deployments...), nil
+}
+
+func (svc *fakeDeploymentService) RollbackApp(_ context.Context, appID, deploymentID string) (api.DeploymentResponse, error) {
+	if svc.rollbackErr != nil {
+		return api.DeploymentResponse{}, svc.rollbackErr
+	}
+	deployment := api.DeploymentResponse{
+		ID:       "dep_rollback",
+		AppID:    appID,
+		Status:   "running",
+		Stage:    "running",
+		BuildLog: "rollback to " + deploymentID + "\n",
+		ImageTag: "porter/" + appID + ":" + deploymentID,
+	}
+	svc.deployments = append(svc.deployments, deployment)
+	return deployment, nil
 }

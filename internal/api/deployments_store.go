@@ -51,12 +51,63 @@ func (service storeDeploymentService) DeployApp(ctx context.Context, appID strin
 		Secrets:      secrets,
 	})
 	if err != nil {
+		if record.ID != "" {
+			_ = service.persistAppStatus(ctx, app.ID, string(record.Status))
+		}
+		return deploymentResponseFromRecord(record), err
+	}
+	if err := service.persistAppStatus(ctx, app.ID, string(record.Status)); err != nil {
 		return deploymentResponseFromRecord(record), err
 	}
 	if err := service.persistDetectedPort(ctx, app.ID, app.InternalPort, record.InternalPort); err != nil {
 		return deploymentResponseFromRecord(record), err
 	}
 	return deploymentResponseFromRecord(record), nil
+}
+
+func (service storeDeploymentService) RollbackApp(ctx context.Context, appID, deploymentID string) (DeploymentResponse, error) {
+	app, err := service.queries.GetApp(ctx, appID)
+	if err != nil {
+		return DeploymentResponse{}, mapStoreNotFound(err)
+	}
+	target, err := service.queries.GetDeployment(ctx, deploymentID)
+	if err != nil {
+		return DeploymentResponse{}, mapStoreNotFound(err)
+	}
+	if target.AppID != appID || target.Status != string(deploy.StatusRunning) || !target.ImageTag.Valid || target.ImageTag.String == "" {
+		return DeploymentResponse{}, ErrInvalidRollbackTarget
+	}
+
+	env, secrets, err := service.envAndSecretValues(ctx, appID)
+	if err != nil {
+		return DeploymentResponse{}, err
+	}
+
+	record, err := service.pipeline.Rollback(ctx, deploy.RollbackRequest{
+		AppID:              app.ID,
+		TargetDeploymentID: target.ID,
+		ImageTag:           target.ImageTag.String,
+		InternalPort:       app.InternalPort,
+		Env:                env,
+		Secrets:            secrets,
+	})
+	if err != nil {
+		if record.ID != "" {
+			_ = service.persistAppStatus(ctx, app.ID, string(record.Status))
+		}
+		return deploymentResponseFromRecord(record), err
+	}
+	if err := service.persistAppStatus(ctx, app.ID, string(record.Status)); err != nil {
+		return deploymentResponseFromRecord(record), err
+	}
+	return deploymentResponseFromRecord(record), nil
+}
+
+func (service storeDeploymentService) persistAppStatus(ctx context.Context, appID, status string) error {
+	return service.queries.UpdateAppStatus(ctx, store.UpdateAppStatusParams{
+		Status: status,
+		ID:     appID,
+	})
 }
 
 func (service storeDeploymentService) persistDetectedPort(ctx context.Context, appID string, storedPort, detectedPort int64) error {

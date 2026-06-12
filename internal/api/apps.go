@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/6space7/porter/internal/deploy"
@@ -12,6 +13,12 @@ import (
 type AppService interface {
 	CreateApp(ctx context.Context, input CreateAppInput) (AppResponse, error)
 	ListApps(ctx context.Context) ([]AppResponse, error)
+	GetApp(ctx context.Context, id string) (AppResponse, error)
+	UpdateApp(ctx context.Context, id string, input UpdateAppInput) (AppResponse, error)
+	DeleteApp(ctx context.Context, id string) error
+	StopApp(ctx context.Context, id string) (AppResponse, error)
+	StartApp(ctx context.Context, id string) (AppResponse, error)
+	RestartApp(ctx context.Context, id string) (AppResponse, error)
 }
 
 type CreateAppInput struct {
@@ -21,6 +28,14 @@ type CreateAppInput struct {
 	Branch       string
 	BuildType    string
 	InternalPort int64
+}
+
+type UpdateAppInput struct {
+	Name         *string
+	GitURL       *string
+	Branch       *string
+	BuildType    *string
+	InternalPort *int64
 }
 
 type AppResponse struct {
@@ -42,6 +57,12 @@ func mountAppRoutes(router chi.Router, apps AppService) {
 	handler := appHandler{apps: apps}
 	router.With(RequireScope("apps:read")).Get("/apps", handler.list)
 	router.With(RequireScope("apps:write")).Post("/apps", handler.create)
+	router.With(RequireScope("apps:read")).Get("/apps/{appID}", handler.get)
+	router.With(RequireScope("apps:write")).Patch("/apps/{appID}", handler.update)
+	router.With(RequireScope("apps:write")).Delete("/apps/{appID}", handler.delete)
+	router.With(RequireScope("apps:deploy")).Post("/apps/{appID}/stop", handler.stop)
+	router.With(RequireScope("apps:deploy")).Post("/apps/{appID}/start", handler.start)
+	router.With(RequireScope("apps:deploy")).Post("/apps/{appID}/restart", handler.restart)
 }
 
 func (handler appHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +129,160 @@ func (handler appHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, app)
+}
+
+func (handler appHandler) get(w http.ResponseWriter, r *http.Request) {
+	appID := chi.URLParam(r, "appID")
+	if !validID(appID) {
+		WriteError(w, http.StatusBadRequest, "invalid_app_id", "App id is invalid.", "Use a valid app id returned by the API.", map[string]any{"field": "app_id"})
+		return
+	}
+
+	app, err := handler.apps.GetApp(r.Context(), appID)
+	if err != nil {
+		writeAppServiceError(w, err, "App could not be loaded.")
+		return
+	}
+	writeJSON(w, http.StatusOK, app)
+}
+
+func (handler appHandler) update(w http.ResponseWriter, r *http.Request) {
+	appID := chi.URLParam(r, "appID")
+	if !validID(appID) {
+		WriteError(w, http.StatusBadRequest, "invalid_app_id", "App id is invalid.", "Use a valid app id returned by the API.", map[string]any{"field": "app_id"})
+		return
+	}
+
+	var input struct {
+		Name         *string `json:"name"`
+		GitURL       *string `json:"git_url"`
+		Branch       *string `json:"branch"`
+		BuildType    *string `json:"build_type"`
+		InternalPort *int64  `json:"internal_port"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid_json", "Request body is not valid JSON.", "Send a JSON object with app settings.", nil)
+		return
+	}
+
+	appInput := UpdateAppInput{
+		Name:         input.Name,
+		GitURL:       input.GitURL,
+		Branch:       input.Branch,
+		BuildType:    input.BuildType,
+		InternalPort: input.InternalPort,
+	}
+	if err := validateUpdateAppInput(appInput); err != nil {
+		writeAppValidationError(w, err)
+		return
+	}
+
+	app, err := handler.apps.UpdateApp(r.Context(), appID, appInput)
+	if err != nil {
+		writeAppServiceError(w, err, "App could not be updated.")
+		return
+	}
+	writeJSON(w, http.StatusOK, app)
+}
+
+func (handler appHandler) delete(w http.ResponseWriter, r *http.Request) {
+	appID := chi.URLParam(r, "appID")
+	if !validID(appID) {
+		WriteError(w, http.StatusBadRequest, "invalid_app_id", "App id is invalid.", "Use a valid app id returned by the API.", map[string]any{"field": "app_id"})
+		return
+	}
+
+	if err := handler.apps.DeleteApp(r.Context(), appID); err != nil {
+		writeAppServiceError(w, err, "App could not be deleted.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler appHandler) stop(w http.ResponseWriter, r *http.Request) {
+	handler.lifecycle(w, r, handler.apps.StopApp)
+}
+
+func (handler appHandler) start(w http.ResponseWriter, r *http.Request) {
+	handler.lifecycle(w, r, handler.apps.StartApp)
+}
+
+func (handler appHandler) restart(w http.ResponseWriter, r *http.Request) {
+	handler.lifecycle(w, r, handler.apps.RestartApp)
+}
+
+func (handler appHandler) lifecycle(w http.ResponseWriter, r *http.Request, action func(context.Context, string) (AppResponse, error)) {
+	appID := chi.URLParam(r, "appID")
+	if !validID(appID) {
+		WriteError(w, http.StatusBadRequest, "invalid_app_id", "App id is invalid.", "Use a valid app id returned by the API.", map[string]any{"field": "app_id"})
+		return
+	}
+
+	app, err := action(r.Context(), appID)
+	if err != nil {
+		writeAppServiceError(w, err, "App action could not be completed.")
+		return
+	}
+	writeJSON(w, http.StatusOK, app)
+}
+
+func validateUpdateAppInput(input UpdateAppInput) error {
+	if input.Name != nil {
+		if err := ValidateAppName(*input.Name); err != nil {
+			return appValidationError{code: "invalid_app_name", message: "App name is invalid.", hint: "Use lowercase letters, numbers, and hyphens.", field: "name"}
+		}
+	}
+	if input.GitURL != nil {
+		if err := deploy.ValidateGitURL(*input.GitURL); err != nil {
+			return appValidationError{code: "invalid_git_url", message: "Git URL is invalid.", hint: "Use an https or ssh Git URL that does not target local resources.", field: "git_url"}
+		}
+	}
+	if input.Branch != nil {
+		if err := ValidateBranchName(*input.Branch); err != nil {
+			return appValidationError{code: "invalid_branch", message: "Branch name is invalid.", hint: "Use a simple Git branch name without spaces, flags, or traversal.", field: "branch"}
+		}
+	}
+	if input.BuildType != nil {
+		if err := ValidateBuildType(*input.BuildType); err != nil {
+			return appValidationError{code: "invalid_build_type", message: "Build type is invalid.", hint: "Use dockerfile or nixpacks.", field: "build_type"}
+		}
+	}
+	if input.InternalPort != nil {
+		if *input.InternalPort < 1 || *input.InternalPort > 65535 {
+			return appValidationError{code: "invalid_internal_port", message: "Internal port is invalid.", hint: "Use a TCP port between 1 and 65535.", field: "internal_port"}
+		}
+	}
+	return nil
+}
+
+type appValidationError struct {
+	code    string
+	message string
+	hint    string
+	field   string
+}
+
+func (err appValidationError) Error() string {
+	return err.code
+}
+
+func writeAppValidationError(w http.ResponseWriter, err error) {
+	var validationErr appValidationError
+	if errors.As(err, &validationErr) {
+		WriteError(w, http.StatusBadRequest, validationErr.code, validationErr.message, validationErr.hint, map[string]any{"field": validationErr.field})
+		return
+	}
+	WriteError(w, http.StatusBadRequest, "invalid_app", "App settings are invalid.", "Check the request fields and try again.", nil)
+}
+
+func writeAppServiceError(w http.ResponseWriter, err error, message string) {
+	if errors.Is(err, ErrNotFound) {
+		WriteError(w, http.StatusNotFound, "not_found", "App was not found.", "Use an app id returned by the API.", nil)
+		return
+	}
+	WriteError(w, http.StatusInternalServerError, "internal_error", message, "Try again or check server logs.", nil)
 }
 
 func defaultString(value, fallback string) string {

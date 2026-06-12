@@ -29,6 +29,12 @@ type RuntimeLogBackend interface {
 	StreamContainerLogs(ctx context.Context, containerName string) (io.ReadCloser, error)
 }
 
+type LifecycleBackend interface {
+	StartContainer(ctx context.Context, containerName string) error
+	StopContainer(ctx context.Context, containerName string) error
+	RemoveContainer(ctx context.Context, containerName string) error
+}
+
 type ContainerSpec struct {
 	Name         string
 	ImageTag     string
@@ -69,6 +75,10 @@ type RuntimeLogs struct {
 	Containers RuntimeLogBackend
 }
 
+type AppController struct {
+	Containers LifecycleBackend
+}
+
 func (runner Runner) Run(ctx context.Context, req deploy.RunRequest) (string, error) {
 	if runner.Containers == nil {
 		return "", fmt.Errorf("container backend is required")
@@ -107,6 +117,36 @@ func (logs RuntimeLogs) StreamRuntimeLogs(ctx context.Context, appID string) (io
 		return nil, fmt.Errorf("app id is required")
 	}
 	return logs.Containers.StreamContainerLogs(ctx, ContainerName(appID))
+}
+
+func (controller AppController) StartApp(ctx context.Context, appID string) error {
+	if controller.Containers == nil {
+		return fmt.Errorf("container lifecycle backend is required")
+	}
+	if appID == "" {
+		return fmt.Errorf("app id is required")
+	}
+	return controller.Containers.StartContainer(ctx, ContainerName(appID))
+}
+
+func (controller AppController) StopApp(ctx context.Context, appID string) error {
+	if controller.Containers == nil {
+		return fmt.Errorf("container lifecycle backend is required")
+	}
+	if appID == "" {
+		return fmt.Errorf("app id is required")
+	}
+	return controller.Containers.StopContainer(ctx, ContainerName(appID))
+}
+
+func (controller AppController) RemoveApp(ctx context.Context, appID string) error {
+	if controller.Containers == nil {
+		return fmt.Errorf("container lifecycle backend is required")
+	}
+	if appID == "" {
+		return fmt.Errorf("app id is required")
+	}
+	return controller.Containers.RemoveContainer(ctx, ContainerName(appID))
 }
 
 func ImageTag(appID, deploymentID string) string {

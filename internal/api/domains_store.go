@@ -83,6 +83,53 @@ func (service storeDomainService) ListDomains(ctx context.Context, appID string)
 	return responses, nil
 }
 
+func (service storeDomainService) DeleteDomain(ctx context.Context, appID, domainID string) error {
+	domain, err := service.queries.GetDomain(ctx, domainID)
+	if err != nil {
+		return mapStoreNotFound(err)
+	}
+	if domain.AppID != appID {
+		return ErrNotFound
+	}
+	if err := service.queries.DeleteDomain(ctx, domainID); err != nil {
+		return err
+	}
+	if service.routeUpdater != nil {
+		return service.routeUpdater.Reconcile(ctx)
+	}
+	return nil
+}
+
+func (service storeDomainService) VerifyDomain(ctx context.Context, appID, domainID string) (DomainResponse, error) {
+	domain, err := service.queries.GetDomain(ctx, domainID)
+	if err != nil {
+		return DomainResponse{}, mapStoreNotFound(err)
+	}
+	if domain.AppID != appID {
+		return DomainResponse{}, ErrNotFound
+	}
+	if service.serverIP == "" {
+		return DomainResponse{}, fmt.Errorf("server public IP is required for domain preflight")
+	}
+	if err := proxy.PreflightCustomDomain(ctx, service.resolver, domain.Hostname, service.serverIP); err != nil {
+		return DomainResponse{}, err
+	}
+
+	updated, err := service.queries.UpdateDomainVerified(ctx, store.UpdateDomainVerifiedParams{
+		Verified: 1,
+		ID:       domainID,
+	})
+	if err != nil {
+		return DomainResponse{}, mapStoreNotFound(err)
+	}
+	if service.routeUpdater != nil {
+		if err := service.routeUpdater.Reconcile(ctx); err != nil {
+			return DomainResponse{}, err
+		}
+	}
+	return domainResponse(updated), nil
+}
+
 func domainResponse(domain store.Domain) DomainResponse {
 	return DomainResponse{
 		ID:       domain.ID,

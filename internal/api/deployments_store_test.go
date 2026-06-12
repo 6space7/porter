@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/6space7/porter/internal/api"
@@ -103,6 +104,75 @@ func TestStoreDeploymentServicePersistsDetectedPortAndReconcilesRoutes(t *testin
 	}
 	if routeUpdater.calls != 1 {
 		t.Fatalf("route updater calls = %d, want 1", routeUpdater.calls)
+	}
+}
+
+func TestStoreDeploymentServiceRollsBackToSuccessfulDeployment(t *testing.T) {
+	ctx := context.Background()
+	queries, closeDB := setupAppForDeploymentServiceTest(t, ctx)
+	defer closeDB()
+	envVars := newFakeEnvVarService()
+	envVars.values = []api.EnvVar{
+		{AppID: "app_1", Key: "DATABASE_URL", Value: "postgres://internal", IsSecret: true},
+	}
+	if _, err := queries.CreateDeployment(ctx, store.CreateDeploymentParams{
+		ID:       "dep_previous",
+		AppID:    "app_1",
+		Status:   "running",
+		Stage:    "running",
+		BuildLog: "previous deploy\n",
+		ImageTag: sql.NullString{String: "porter/app_1:dep_previous", Valid: true},
+	}); err != nil {
+		t.Fatalf("create previous deployment: %v", err)
+	}
+
+	pipeline := deploy.Pipeline{
+		Store: deploy.NewStoreDeploymentStore(queries, func() string {
+			return "dep_rollback"
+		}),
+		Runner: deploy.RunnerFunc(func(_ context.Context, req deploy.RunRequest) (string, error) {
+			if req.ImageTag != "porter/app_1:dep_previous" || req.InternalPort != 3000 {
+				t.Fatalf("rollback run request = %#v", req)
+			}
+			if req.Env["DATABASE_URL"] != "postgres://internal" {
+				t.Fatalf("rollback env = %#v", req.Env)
+			}
+			return "started previous image\n", nil
+		}),
+	}
+	service := api.NewStoreDeploymentService(queries, pipeline, envVars)
+
+	deployment, err := service.RollbackApp(ctx, "app_1", "dep_previous")
+	if err != nil {
+		t.Fatalf("rollback app: %v", err)
+	}
+	if deployment.ID != "dep_rollback" || deployment.ImageTag != "porter/app_1:dep_previous" || deployment.Status != "running" {
+		t.Fatalf("rollback deployment = %#v", deployment)
+	}
+	if deployment.BuildLog == "" {
+		t.Fatalf("rollback deployment missing build log")
+	}
+}
+
+func TestStoreDeploymentServiceRejectsInvalidRollbackTarget(t *testing.T) {
+	ctx := context.Background()
+	queries, closeDB := setupAppForDeploymentServiceTest(t, ctx)
+	defer closeDB()
+	if _, err := queries.CreateDeployment(ctx, store.CreateDeploymentParams{
+		ID:       "dep_failed",
+		AppID:    "app_1",
+		Status:   "failed",
+		Stage:    "building",
+		BuildLog: "failed deploy\n",
+		ImageTag: sql.NullString{String: "porter/app_1:dep_failed", Valid: true},
+	}); err != nil {
+		t.Fatalf("create failed deployment: %v", err)
+	}
+
+	service := api.NewStoreDeploymentService(queries, deploy.Pipeline{}, nil)
+
+	if _, err := service.RollbackApp(ctx, "app_1", "dep_failed"); err != api.ErrInvalidRollbackTarget {
+		t.Fatalf("rollback error = %v, want invalid rollback target", err)
 	}
 }
 

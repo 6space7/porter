@@ -72,6 +72,57 @@ func TestStoreDomainServiceDoesNotStoreFailedPreflight(t *testing.T) {
 	}
 }
 
+func TestStoreDomainServiceDeletesAndReverifiesDomains(t *testing.T) {
+	ctx := context.Background()
+	queries, closeDB := setupAppForDomainTest(t, ctx)
+	defer closeDB()
+	routeUpdater := &fakeRouteUpdater{}
+
+	_, err := queries.CreateDomain(ctx, store.CreateDomainParams{
+		ID:       "dom_custom",
+		AppID:    "app_1",
+		Hostname: "app.example.com",
+		Type:     "custom",
+		Verified: 0,
+	})
+	if err != nil {
+		t.Fatalf("create domain: %v", err)
+	}
+
+	service := api.NewStoreDomainService(queries, api.StoreDomainServiceOptions{
+		Resolver: fakeResolver{
+			"app.example.com": []string{"203.0.113.42"},
+		},
+		ServerIP:     "203.0.113.42",
+		RouteUpdater: routeUpdater,
+	})
+
+	verified, err := service.VerifyDomain(ctx, "app_1", "dom_custom")
+	if err != nil {
+		t.Fatalf("verify domain: %v", err)
+	}
+	if !verified.Verified {
+		t.Fatalf("verified domain = %#v", verified)
+	}
+	if routeUpdater.calls != 1 {
+		t.Fatalf("route updater calls after verify = %d, want 1", routeUpdater.calls)
+	}
+
+	if err := service.DeleteDomain(ctx, "app_1", "dom_custom"); err != nil {
+		t.Fatalf("delete domain: %v", err)
+	}
+	domains, err := service.ListDomains(ctx, "app_1")
+	if err != nil {
+		t.Fatalf("list domains after delete: %v", err)
+	}
+	if len(domains) != 0 {
+		t.Fatalf("domains after delete = %#v", domains)
+	}
+	if routeUpdater.calls != 2 {
+		t.Fatalf("route updater calls after delete = %d, want 2", routeUpdater.calls)
+	}
+}
+
 func setupAppForDomainTest(t *testing.T, ctx context.Context) (*store.Queries, func()) {
 	t.Helper()
 

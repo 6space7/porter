@@ -28,6 +28,7 @@ type Options struct {
 	Cloner       deploy.Cloner
 	Builder      deploy.Builder
 	Runner       deploy.Runner
+	AppRuntime   api.AppRuntime
 	RuntimeLogs  api.RuntimeLogStreamer
 	CaddyRuntime proxy.CaddyRuntime
 	CaddyAdmin   proxy.CaddyAdmin
@@ -115,6 +116,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		Apps: api.NewStoreAppServiceWithOptions(queries, api.StoreAppServiceOptions{
 			PublicIP:     cfg.PublicIP,
 			RouteUpdater: routeUpdater,
+			Runtime:      chooseAppRuntime(opts.AppRuntime, defaultStages.AppRuntime),
 		}),
 		Domains: api.NewStoreDomainService(queries, api.StoreDomainServiceOptions{
 			Resolver:     opts.Resolver,
@@ -226,6 +228,7 @@ type deploymentStages struct {
 	Cloner      deploy.Cloner
 	Builder     deploy.Builder
 	Runner      deploy.Runner
+	AppRuntime  api.AppRuntime
 	RuntimeLogs api.RuntimeLogStreamer
 }
 
@@ -238,6 +241,7 @@ func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
 		Cloner:      deploy.GitCloner{Root: cfg.WorkspacePath},
 		Builder:     dockerstage.Builder{Images: backend},
 		Runner:      dockerstage.Runner{Containers: backend},
+		AppRuntime:  dockerstage.AppController{Containers: backend},
 		RuntimeLogs: dockerstage.RuntimeLogs{Containers: backend},
 	}, nil
 }
@@ -257,6 +261,13 @@ func chooseBuilder(override deploy.Builder, fallback deploy.Builder) deploy.Buil
 }
 
 func chooseRunner(override deploy.Runner, fallback deploy.Runner) deploy.Runner {
+	if override != nil {
+		return override
+	}
+	return fallback
+}
+
+func chooseAppRuntime(override api.AppRuntime, fallback api.AppRuntime) api.AppRuntime {
 	if override != nil {
 		return override
 	}
