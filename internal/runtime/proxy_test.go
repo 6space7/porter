@@ -63,6 +63,48 @@ func TestNewHandlerReconcilesCaddyRoutesFromSQLite(t *testing.T) {
 	}
 }
 
+func TestNewHandlerManagesCaddyBeforeReconcileWhenEnabled(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "porter.db")
+	seedVerifiedDomain(t, ctx, dbPath)
+
+	var events []string
+	lifecycle := &fakeCaddyRuntime{events: &events}
+	admin := &fakeCaddyAdmin{events: &events}
+	db, _, err := runtime.NewHandlerWithOptions(ctx, config.Config{
+		DatabasePath:  dbPath,
+		WorkspacePath: filepath.Join(t.TempDir(), "work"),
+		CaddyAskURL:   "http://127.0.0.1:8080/api/v1/caddy/ask",
+		ManageCaddy:   true,
+	}, runtime.Options{
+		CaddyRuntime: lifecycle,
+		CaddyAdmin:   admin,
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{}, nil
+		}),
+		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
+			return deploy.BuildResult{}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(context.Context, deploy.RunRequest) (string, error) {
+			return "", nil
+		}),
+	})
+	if err != nil {
+		t.Fatalf("new handler: %v", err)
+	}
+	defer db.Close()
+
+	if !lifecycle.called {
+		t.Fatal("caddy lifecycle was not called")
+	}
+	if lifecycle.spec != proxy.DefaultCaddyContainerSpec() {
+		t.Fatalf("caddy spec = %#v", lifecycle.spec)
+	}
+	if len(events) != 2 || events[0] != "ensure" || events[1] != "reconcile" {
+		t.Fatalf("events = %#v", events)
+	}
+}
+
 func seedVerifiedDomain(t *testing.T, ctx context.Context, dbPath string) {
 	t.Helper()
 
@@ -103,10 +145,29 @@ func seedVerifiedDomain(t *testing.T, ctx context.Context, dbPath string) {
 type fakeCaddyAdmin struct {
 	called bool
 	config proxy.CaddyConfig
+	events *[]string
 }
 
 func (admin *fakeCaddyAdmin) ApplyConfig(_ context.Context, config proxy.CaddyConfig) error {
 	admin.called = true
 	admin.config = config
+	if admin.events != nil {
+		*admin.events = append(*admin.events, "reconcile")
+	}
+	return nil
+}
+
+type fakeCaddyRuntime struct {
+	called bool
+	spec   proxy.CaddyContainerSpec
+	events *[]string
+}
+
+func (runtime *fakeCaddyRuntime) EnsureCaddy(_ context.Context, spec proxy.CaddyContainerSpec) error {
+	runtime.called = true
+	runtime.spec = spec
+	if runtime.events != nil {
+		*runtime.events = append(*runtime.events, "ensure")
+	}
 	return nil
 }

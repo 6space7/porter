@@ -14,12 +14,13 @@ import (
 )
 
 type Options struct {
-	Resolver   proxy.Resolver
-	SecretBox  *secretcrypto.SecretBox
-	Cloner     deploy.Cloner
-	Builder    deploy.Builder
-	Runner     deploy.Runner
-	CaddyAdmin proxy.CaddyAdmin
+	Resolver     proxy.Resolver
+	SecretBox    *secretcrypto.SecretBox
+	Cloner       deploy.Cloner
+	Builder      deploy.Builder
+	Runner       deploy.Runner
+	CaddyRuntime proxy.CaddyRuntime
+	CaddyAdmin   proxy.CaddyAdmin
 }
 
 func NewHandler(ctx context.Context, cfg config.Config) (*store.DB, http.Handler, error) {
@@ -39,10 +40,28 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		_ = db.Close()
 		return nil, nil, err
 	}
-	if opts.CaddyAdmin != nil {
+	caddyAdmin := opts.CaddyAdmin
+	if cfg.ManageCaddy {
+		caddyRuntime := opts.CaddyRuntime
+		if caddyRuntime == nil {
+			caddyRuntime, err = proxy.NewDockerCaddyRuntime()
+			if err != nil {
+				_ = db.Close()
+				return nil, nil, err
+			}
+		}
+		if err := (proxy.CaddyManager{Runtime: caddyRuntime}).Ensure(ctx); err != nil {
+			_ = db.Close()
+			return nil, nil, err
+		}
+		if caddyAdmin == nil {
+			caddyAdmin = proxy.CaddyAdminClient{}
+		}
+	}
+	if caddyAdmin != nil {
 		reconciler := proxy.Reconciler{
 			Source: proxy.NewStoreRouteSource(queries),
-			Admin:  opts.CaddyAdmin,
+			Admin:  caddyAdmin,
 			AskURL: cfg.CaddyAskURL,
 		}
 		if err := reconciler.Reconcile(ctx); err != nil {
