@@ -1,15 +1,80 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
 )
 
-var scpLikeGitURLPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+@([A-Za-z0-9.-]+):[A-Za-z0-9._~/-]+(?:\.git)?$`)
+var (
+	scpLikeGitURLPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+@([A-Za-z0-9.-]+):[A-Za-z0-9._~/-]+(?:\.git)?$`)
+	gitBranchPattern     = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+)
+
+type CommandRunner interface {
+	Run(ctx context.Context, name string, args []string, dir string) ([]byte, error)
+}
+
+type ExecCommandRunner struct{}
+
+func (ExecCommandRunner) Run(ctx context.Context, name string, args []string, dir string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	return cmd.CombinedOutput()
+}
+
+type GitCloner struct {
+	Root   string
+	Runner CommandRunner
+}
+
+func (cloner GitCloner) Clone(ctx context.Context, req CloneRequest) (string, error) {
+	if err := ValidateGitURL(req.GitURL); err != nil {
+		return "", err
+	}
+	if err := ValidateGitBranch(req.Branch); err != nil {
+		return "", err
+	}
+
+	root := cloner.Root
+	if root == "" {
+		root = os.TempDir()
+	}
+	dest, err := safeJoin(root, req.AppID, req.DeploymentID, "source")
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+		return "", fmt.Errorf("create clone parent: %w", err)
+	}
+
+	runner := cloner.Runner
+	if runner == nil {
+		runner = ExecCommandRunner{}
+	}
+
+	output, err := runner.Run(ctx, "git", []string{
+		"clone",
+		"--depth",
+		"1",
+		"--branch",
+		req.Branch,
+		"--",
+		req.GitURL,
+		dest,
+	}, root)
+	if err != nil {
+		return string(output), fmt.Errorf("git clone: %w", err)
+	}
+	return string(output), nil
+}
 
 func ValidateGitURL(gitURL string) error {
 	if gitURL == "" {
@@ -42,6 +107,25 @@ func ValidateGitURL(gitURL string) error {
 	return validateGitHost(parsed.Hostname())
 }
 
+func ValidateGitBranch(branch string) error {
+	if len(branch) == 0 || len(branch) > 128 {
+		return fmt.Errorf("branch name must be 1-128 characters")
+	}
+	if !gitBranchPattern.MatchString(branch) {
+		return fmt.Errorf("branch name contains unsupported characters")
+	}
+	if strings.HasPrefix(branch, "-") || strings.HasPrefix(branch, "/") || strings.HasPrefix(branch, ".") {
+		return fmt.Errorf("branch name has unsafe prefix")
+	}
+	if strings.Contains(branch, "..") || strings.Contains(branch, "//") || strings.Contains(branch, "@{") {
+		return fmt.Errorf("branch name contains unsafe sequence")
+	}
+	if strings.HasSuffix(branch, "/") || strings.HasSuffix(branch, ".") || strings.HasSuffix(branch, ".lock") {
+		return fmt.Errorf("branch name has unsafe suffix")
+	}
+	return nil
+}
+
 func validateGitHost(host string) error {
 	lower := strings.ToLower(host)
 	if lower == "localhost" || strings.HasSuffix(lower, ".localhost") {
@@ -63,4 +147,22 @@ func hasWhitespace(value string) bool {
 		}
 	}
 	return false
+}
+
+func safeJoin(root string, parts ...string) (string, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve root: %w", err)
+	}
+
+	allParts := append([]string{absRoot}, parts...)
+	target := filepath.Clean(filepath.Join(allParts...))
+	rel, err := filepath.Rel(absRoot, target)
+	if err != nil {
+		return "", fmt.Errorf("resolve target: %w", err)
+	}
+	if rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("target path escapes root")
+	}
+	return target, nil
 }
