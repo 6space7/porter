@@ -25,7 +25,7 @@ func (client CaddyAdminClient) ApplyConfig(ctx context.Context, config CaddyConf
 		return fmt.Errorf("encode caddy config: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+"/config", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/load", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create caddy request: %w", err)
 	}

@@ -37,8 +37,8 @@ func TestCaddyAdminClientAppliesConfigToAdminAPI(t *testing.T) {
 		t.Fatalf("apply config: %v", err)
 	}
 
-	if method != http.MethodPut || path != "/config" {
-		t.Fatalf("request = %s %s, want PUT /config", method, path)
+	if method != http.MethodPost || path != "/load" {
+		t.Fatalf("request = %s %s, want POST /load", method, path)
 	}
 
 	apps := body["apps"].(map[string]any)
