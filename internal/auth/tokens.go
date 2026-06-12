@@ -29,14 +29,14 @@ func NewToken(name string, scopes []string) (string, TokenRecord, error) {
 	record := TokenRecord{
 		ID:     id,
 		Name:   name,
-		Hash:   tokenHash(secret),
+		Hash:   HashToken(secret),
 		Scopes: append([]string(nil), scopes...),
 	}
 	return secret, record, nil
 }
 
 func VerifyToken(plaintext, hash string) bool {
-	expected := tokenHash(plaintext)
+	expected := HashToken(plaintext)
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(hash)) == 1
 }
 
@@ -49,7 +49,7 @@ func HasScope(granted []string, required string) bool {
 	return false
 }
 
-func tokenHash(plaintext string) string {
+func HashToken(plaintext string) string {
 	sum := sha256.Sum256([]byte(plaintext))
 	return hex.EncodeToString(sum[:])
 }
