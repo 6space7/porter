@@ -65,11 +65,11 @@ func TestRunnerCreatesNetworkAndReplacesContainerWithSafeDefaults(t *testing.T) 
 	if log != "container started\n" {
 		t.Fatalf("log = %q", log)
 	}
-	if containers.networkName != "porter-app_1" {
-		t.Fatalf("network = %q, want porter-app_1", containers.networkName)
+	if containers.networkName != "porter-proxy" {
+		t.Fatalf("network = %q, want porter-proxy", containers.networkName)
 	}
 	spec := containers.spec
-	if spec.Name != "porter-app_1" || spec.ImageTag != "porter/app_1:dep_1" || spec.NetworkName != "porter-app_1" {
+	if spec.Name != "porter-app_1" || spec.ImageTag != "porter/app_1:dep_1" || spec.NetworkName != "porter-proxy" {
 		t.Fatalf("spec identity = %#v", spec)
 	}
 	if spec.InternalPort != 8080 {
@@ -108,6 +108,12 @@ func TestRuntimeLogsStreamsSanitizedAppContainerLogs(t *testing.T) {
 	}
 	if containers.containerName != "porter-app-1" {
 		t.Fatalf("container name = %q", containers.containerName)
+	}
+}
+
+func TestProxyNetworkNameMatchesManagedCaddyNetwork(t *testing.T) {
+	if got := dockerstage.ProxyNetworkName(); got != "porter-proxy" {
+		t.Fatalf("proxy network name = %q, want porter-proxy", got)
 	}
 }
 

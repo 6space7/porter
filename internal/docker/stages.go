@@ -13,6 +13,7 @@ import (
 const (
 	defaultMemoryBytes = int64(512 * 1024 * 1024)
 	defaultNanoCPUs    = int64(1_000_000_000)
+	proxyNetworkName   = "porter-proxy"
 )
 
 type ImageBackend interface {
@@ -76,7 +77,7 @@ func (runner Runner) Run(ctx context.Context, req deploy.RunRequest) (string, er
 		return "", fmt.Errorf("image tag is required")
 	}
 
-	networkName := NetworkName(req.AppID)
+	networkName := ProxyNetworkName()
 	if err := runner.Containers.EnsureNetwork(ctx, networkName); err != nil {
 		return "", err
 	}
@@ -116,8 +117,8 @@ func ContainerName(appID string) string {
 	return "porter-" + sanitizeDockerName(appID)
 }
 
-func NetworkName(appID string) string {
-	return "porter-" + sanitizeDockerName(appID)
+func ProxyNetworkName() string {
+	return proxyNetworkName
 }
 
 func envList(env map[string]string) []string {
