@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 
 	"github.com/6space7/porter/internal/proxy"
@@ -50,6 +51,20 @@ func TestPreflightCustomDomainRequiresARecordToServerIP(t *testing.T) {
 	}
 }
 
+func TestPreflightCustomDomainTreatsMissingDNSAsPreflightFailure(t *testing.T) {
+	resolver := failingResolver{err: &net.DNSError{IsNotFound: true, Name: "app.example.com"}}
+
+	err := proxy.PreflightCustomDomain(context.Background(), resolver, "app.example.com", "203.0.113.42")
+
+	var preflightErr *proxy.DNSPreflightError
+	if !errors.As(err, &preflightErr) {
+		t.Fatalf("error = %v, want DNSPreflightError", err)
+	}
+	if preflightErr.Hostname != "app.example.com" || preflightErr.RequiredARecord != "203.0.113.42" || len(preflightErr.CurrentRecords) != 0 {
+		t.Fatalf("preflight error = %#v", preflightErr)
+	}
+}
+
 func TestPreflightCustomDomainAcceptsMatchingARecord(t *testing.T) {
 	resolver := fakeResolver{
 		"app.example.com": []string{"198.51.100.10", "203.0.113.42"},
@@ -64,4 +79,12 @@ type fakeResolver map[string][]string
 
 func (resolver fakeResolver) LookupHost(_ context.Context, hostname string) ([]string, error) {
 	return resolver[hostname], nil
+}
+
+type failingResolver struct {
+	err error
+}
+
+func (resolver failingResolver) LookupHost(context.Context, string) ([]string, error) {
+	return nil, resolver.err
 }

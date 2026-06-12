@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -41,6 +42,14 @@ func GenerateSSLIPDomain(appName, publicIP string) (string, error) {
 func PreflightCustomDomain(ctx context.Context, resolver Resolver, hostname, serverIP string) error {
 	records, err := resolver.LookupHost(ctx, hostname)
 	if err != nil {
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			return &DNSPreflightError{
+				Hostname:        hostname,
+				RequiredARecord: serverIP,
+				CurrentRecords:  nil,
+			}
+		}
 		return fmt.Errorf("resolve domain: %w", err)
 	}
 
