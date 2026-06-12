@@ -2,11 +2,14 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/6space7/porter/internal/auth"
 	"github.com/6space7/porter/internal/store"
@@ -22,9 +25,10 @@ type AuthService interface {
 }
 
 type LoginResponse struct {
-	Token   string   `json:"token"`
-	TokenID string   `json:"token_id"`
-	Scopes  []string `json:"scopes"`
+	Token     string   `json:"token"`
+	TokenID   string   `json:"token_id"`
+	Scopes    []string `json:"scopes"`
+	CSRFToken string   `json:"csrf_token,omitempty"`
 }
 
 type CreateTokenResponse struct {
@@ -45,11 +49,12 @@ type createTokenRequest struct {
 }
 
 type authHandler struct {
-	auth AuthService
+	auth         AuthService
+	loginLimiter FailureLimiter
 }
 
-func mountAuthRoutes(router chi.Router, auth AuthService) {
-	handler := authHandler{auth: auth}
+func mountAuthRoutes(router chi.Router, auth AuthService, loginLimiter FailureLimiter) {
+	handler := authHandler{auth: auth, loginLimiter: loginLimiter}
 	router.Post("/auth/login", handler.login)
 }
 
@@ -60,6 +65,12 @@ func mountAuthSessionRoutes(router chi.Router, auth AuthService) {
 }
 
 func (handler authHandler) login(w http.ResponseWriter, r *http.Request) {
+	key := clientIP(r)
+	if handler.loginLimiter != nil && !handler.loginLimiter.Allow(key) {
+		WriteError(w, http.StatusTooManyRequests, "rate_limited", "Too many login failures.", "Wait before retrying login.", nil)
+		return
+	}
+
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid_json", "Request body must be valid JSON.", "Send an object with email and password.", nil)
@@ -74,12 +85,26 @@ func (handler authHandler) login(w http.ResponseWriter, r *http.Request) {
 	response, err := handler.auth.Login(r.Context(), email, req.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidLogin) {
+			if handler.loginLimiter != nil {
+				handler.loginLimiter.RecordFailure(key)
+			}
 			WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentication failed.", "Check the admin email and password.", nil)
 			return
 		}
 		WriteError(w, http.StatusInternalServerError, "internal_error", "Login could not be completed.", "Try again or check server logs.", nil)
 		return
 	}
+	if handler.loginLimiter != nil {
+		handler.loginLimiter.Reset(key)
+	}
+	csrfToken, err := newCSRFToken()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "internal_error", "Login could not be completed.", "Try again or check server logs.", nil)
+		return
+	}
+	response.CSRFToken = csrfToken
+	http.SetCookie(w, auth.NewSessionCookie(SessionCookieName, response.Token, 24*time.Hour, true))
+	http.SetCookie(w, newCSRFCookie(csrfToken))
 	writeJSON(w, http.StatusOK, response)
 }
 
@@ -93,6 +118,8 @@ func (handler authHandler) logout(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "internal_error", "Logout could not be completed.", "Try again or check server logs.", nil)
 		return
 	}
+	http.SetCookie(w, auth.ExpiredSessionCookie(SessionCookieName, true))
+	http.SetCookie(w, expiredCSRFCookie())
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -204,4 +231,34 @@ func normalizeRequestedScopes(input []string) ([]string, bool) {
 		}
 	}
 	return scopes, len(scopes) > 0
+}
+
+func newCSRFToken() (string, error) {
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
+}
+
+func newCSRFCookie(value string) *http.Cookie {
+	return &http.Cookie{
+		Name:     CSRFCookieName,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   int((24 * time.Hour).Seconds()),
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	}
+}
+
+func expiredCSRFCookie() *http.Cookie {
+	return &http.Cookie{
+		Name:     CSRFCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	}
 }

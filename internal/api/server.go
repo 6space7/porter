@@ -7,15 +7,17 @@ import (
 )
 
 type Dependencies struct {
-	Auth          AuthService
-	TokenVerifier TokenVerifier
-	Projects      ProjectService
-	Apps          AppService
-	Domains       DomainService
-	EnvVars       EnvVarService
-	Deployments   DeploymentService
-	Logs          LogService
-	CaddyAsk      CaddyAskService
+	Auth                AuthService
+	TokenVerifier       TokenVerifier
+	LoginFailureLimiter FailureLimiter
+	TokenFailureLimiter FailureLimiter
+	Projects            ProjectService
+	Apps                AppService
+	Domains             DomainService
+	EnvVars             EnvVarService
+	Deployments         DeploymentService
+	Logs                LogService
+	CaddyAsk            CaddyAskService
 }
 
 func NewRouter() http.Handler {
@@ -31,11 +33,20 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 
 	router.Route("/api/v1", func(r chi.Router) {
 		if deps.Auth != nil {
-			mountAuthRoutes(r, deps.Auth)
+			loginLimiter := deps.LoginFailureLimiter
+			if loginLimiter == nil {
+				loginLimiter = NewDefaultFailureLimiter()
+			}
+			mountAuthRoutes(r, deps.Auth, loginLimiter)
 		}
 		if deps.TokenVerifier != nil {
+			tokenLimiter := deps.TokenFailureLimiter
+			if tokenLimiter == nil {
+				tokenLimiter = NewDefaultFailureLimiter()
+			}
 			r.Group(func(protected chi.Router) {
-				protected.Use(RequireBearerToken(deps.TokenVerifier))
+				protected.Use(RequireAuth(deps.TokenVerifier, tokenLimiter))
+				protected.Use(RequireCSRFForSessionAuth)
 				if deps.Auth != nil {
 					mountAuthSessionRoutes(protected, deps.Auth)
 				}
