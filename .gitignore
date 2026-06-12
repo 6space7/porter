@@ -1,0 +1,42 @@
+# Go
+bin/
+dist/
+coverage.out
+*.test
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.svelte-kit/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# SQLite and runtime state
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+data/
+var/
+
+# Build outputs
+porter
+porter.exe
+*.tar.gz
+*.zip
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
