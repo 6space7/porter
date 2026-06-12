@@ -9,6 +9,7 @@ import (
 type Dependencies struct {
 	TokenVerifier TokenVerifier
 	Projects      ProjectService
+	Apps          AppService
 }
 
 func NewRouter() http.Handler {
@@ -24,6 +25,9 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 			r.Use(RequireBearerToken(deps.TokenVerifier))
 			if deps.Projects != nil {
 				mountProjectRoutes(r, deps.Projects)
+			}
+			if deps.Apps != nil {
+				mountAppRoutes(r, deps.Apps)
 			}
 		})
 	}
