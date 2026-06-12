@@ -1,13 +1,14 @@
 # Go
 bin/
 dist/
+!frontend/dist/
+!frontend/dist/**
 coverage.out
 *.test
 
 # Node / frontend
 node_modules/
 frontend/node_modules/
-frontend/dist/
 frontend/.svelte-kit/
 npm-debug.log*
 yarn-debug.log*

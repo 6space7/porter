@@ -25,8 +25,10 @@ The product is built phase by phase from the project brief:
 Phase 1 backend is complete and has been verified on a fresh Ubuntu VPS. The
 current binary provides the core JSON API, SQLite store, scoped bearer-token
 auth, Docker deployment pipeline, Dockerfile `EXPOSE` port detection, managed
-Caddy routing, stored build logs, runtime log streaming, source install, and
-secure secret handling. The Svelte UI is Phase 2.
+Caddy routing, stored build logs, runtime log streaming, source install, secure
+secret handling, and an embedded Svelte web UI for the core one-server
+workflows. Later phases add deeper rollback UX, service catalog/Nixpacks, MCP,
+multi-server deploys, GitHub auto-deploy, and release lifecycle automation.
 
 Verified on 2026-06-12:
 
@@ -42,6 +44,33 @@ Verified on 2026-06-12:
 - scoped and unauthenticated requests are rejected;
 - malicious Git URLs are rejected;
 - Caddy's admin API is bound to localhost only.
+
+Local browser checks also cover the embedded UI login/logout flow, apps
+dashboard, app creation form, app detail actions, domains, environment editor,
+deployment/log panes, token settings, services placeholder, and desktop/mobile
+layouts.
+
+## Web UI
+
+The Svelte 5 UI lives in `frontend/` and is embedded into the Go binary from
+`frontend/dist`.
+
+```bash
+cd frontend
+npm install
+npm run check
+npm run build
+```
+
+The top-level verification target runs the frontend checks and rebuilds the
+embedded assets before testing and building the Go server:
+
+```bash
+make verify
+```
+
+At runtime, open the install URL in a browser to use the dashboard. The UI is a
+client of the public `/api/v1` API and does not use private in-process hooks.
 
 ## Source Install
 

@@ -12,12 +12,14 @@ import (
 	"strconv"
 	"strings"
 
+	uifrontend "github.com/6space7/porter/frontend"
 	"github.com/6space7/porter/internal/api"
 	"github.com/6space7/porter/internal/auth"
 	"github.com/6space7/porter/internal/config"
 	secretcrypto "github.com/6space7/porter/internal/crypto"
 	"github.com/6space7/porter/internal/deploy"
 	dockerstage "github.com/6space7/porter/internal/docker"
+	frontendhandler "github.com/6space7/porter/internal/frontend"
 	"github.com/6space7/porter/internal/proxy"
 	"github.com/6space7/porter/internal/store"
 )
@@ -109,7 +111,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 	if strings.TrimSpace(cfg.PlatformDomain) != "" {
 		caddyAsk = api.NewStaticDomainCaddyAskService(caddyAsk, cfg.PlatformDomain)
 	}
-	handler := api.NewRouterWithDeps(api.Dependencies{
+	apiHandler := api.NewRouterWithDeps(api.Dependencies{
 		Auth:          api.NewStoreAuthService(queries),
 		TokenVerifier: api.NewStoreTokenVerifier(queries),
 		Projects:      api.NewStoreProjectService(queries, nil),
@@ -130,6 +132,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		Logs:     api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
 		CaddyAsk: caddyAsk,
 	})
+	handler := frontendhandler.NewHandler(apiHandler, uifrontend.Dist())
 	return db, handler, nil
 }
 

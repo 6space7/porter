@@ -1,8 +1,9 @@
 # Architecture
 
-porter is a single Go binary. In Phase 1 it serves the JSON API, runs SQLite
-migrations, talks to Docker, manages Caddy, and exposes deployment logs.
-Later phases add the embedded frontend and MCP server.
+porter is a single Go binary. It serves the JSON API, runs SQLite migrations,
+talks to Docker, manages Caddy, exposes deployment logs, and serves the
+embedded Svelte web UI. Later phases add the MCP server and broader deployment
+automation.
 
 ## Fixed Stack
 
@@ -24,14 +25,21 @@ The codebase uses domain-based packages:
 - `internal/crypto`
 - `internal/deploy`
 - `internal/docker`
+- `internal/frontend`
 - `internal/install`
 - `internal/proxy`
 - `internal/runtime`
 - `internal/store`
+- `frontend`
 
 ## Design Notes
 
-All product behavior must be reachable through `/api/v1/...`; the web UI, future CLI, and MCP server are clients of that API.
+All product behavior must be reachable through `/api/v1/...`; the web UI,
+future CLI, and MCP server are clients of that API.
+
+The UI is built in `frontend/` with Svelte 5, Vite, and TypeScript. `frontend/embed.go`
+embeds `frontend/dist`, and `internal/frontend` serves static assets with an SPA
+fallback while preserving API routes for `internal/api`.
 
 Runtime startup opens the SQLite database, loads the master key when configured,
 bootstraps an initial hashed admin bearer token when provided, prepares Docker
