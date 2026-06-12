@@ -20,7 +20,7 @@
 - Modify: `cmd/server/main.go`
 - Modify: `README.md`
 
-- [ ] **Step 1: Add failing backup tests**
+- [x] **Step 1: Add failing backup tests**
 
 Create `internal/lifecycle/backup_test.go` with tests for:
 
@@ -60,7 +60,7 @@ go test ./internal/lifecycle -run TestBackupSQLiteCopiesDatabaseWithTimestamp -c
 
 Expected: FAIL because `internal/lifecycle` does not exist.
 
-- [ ] **Step 2: Implement backup helper**
+- [x] **Step 2: Implement backup helper**
 
 Implement `BackupSQLite(ctx, opts)` to:
 
@@ -73,7 +73,7 @@ return BackupResult{Path, Bytes}
 
 Use `os.Open`, `os.OpenFile` with `O_CREATE|O_EXCL|O_WRONLY`, and `io.Copy`.
 
-- [ ] **Step 3: Add failing update planner tests**
+- [x] **Step 3: Add failing update planner tests**
 
 Create `internal/lifecycle/update_test.go` proving:
 
@@ -103,7 +103,7 @@ go test ./internal/lifecycle -count=1
 
 Expected: FAIL until `PlanUpdate` exists.
 
-- [ ] **Step 4: Implement update planning and CLI commands**
+- [x] **Step 4: Implement update planning and CLI commands**
 
 Add:
 
@@ -127,7 +127,7 @@ porter update --version vX.Y.Z --repo 6space7/porter
 
 parse flags, run a DB backup before update planning, and print the planned release URL. Keep actual binary replacement for Task 2 after installer/release assets exist.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 

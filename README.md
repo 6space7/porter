@@ -140,6 +140,25 @@ The installer:
 
 Save the initial password, then remove `/etc/porter/initial-password`.
 
+## Lifecycle Commands
+
+The installed binary includes lifecycle helpers:
+
+```bash
+sudo porter backup \
+  --database /var/lib/porter/porter.db \
+  --backup-dir /var/lib/porter/backups
+
+sudo porter update \
+  --version vX.Y.Z \
+  --database /var/lib/porter/porter.db \
+  --backup-dir /var/lib/porter/backups
+```
+
+`backup` writes a timestamped SQLite snapshot. `update` currently creates the
+same backup and prints the release archive URL that the release installer path
+will use.
+
 ## API Smoke Test
 
 ```bash
