@@ -13,6 +13,7 @@ import (
 	"github.com/6space7/porter/internal/auth"
 	"github.com/6space7/porter/internal/config"
 	secretcrypto "github.com/6space7/porter/internal/crypto"
+	"github.com/6space7/porter/internal/deploy"
 	"github.com/6space7/porter/internal/runtime"
 	"github.com/6space7/porter/internal/store"
 )
@@ -34,13 +35,22 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 			"custom.example.com": []string{"203.0.113.42"},
 		},
 		SecretBox: secretBox,
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app/source", Log: "cloned\n"}, nil
+		}),
+		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
+			return deploy.BuildResult{ImageTag: "porter/app:dep", Log: "built\n"}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(context.Context, deploy.RunRequest) (string, error) {
+			return "started\n", nil
+		}),
 	})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
 	}
 	defer db.Close()
 
-	plaintext, record, err := auth.NewToken("writer", []string{"projects:read", "projects:write", "apps:read", "apps:write"})
+	plaintext, record, err := auth.NewToken("writer", []string{"projects:read", "projects:write", "apps:read", "apps:write", "apps:deploy"})
 	if err != nil {
 		t.Fatalf("new token: %v", err)
 	}
@@ -120,6 +130,18 @@ func TestNewHandlerWiresStoreBackedAuthAndProjects(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "••••") || strings.Contains(rr.Body.String(), "postgres://secret") {
 		t.Fatalf("env var response leaked secret or missed mask: %s", rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/apps/"+app.ID+"/deploy", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("deploy status = %d, want %d; body=%s", rr.Code, http.StatusAccepted, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"stage":"running"`) {
+		t.Fatalf("deploy response missing running stage: %s", rr.Body.String())
 	}
 }
 

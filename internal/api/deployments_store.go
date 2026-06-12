@@ -23,16 +23,18 @@ func (service storeDeploymentService) DeployApp(ctx context.Context, appID strin
 		return DeploymentResponse{}, err
 	}
 
-	secrets, err := service.secretValues(ctx, appID)
+	env, secrets, err := service.envAndSecretValues(ctx, appID)
 	if err != nil {
 		return DeploymentResponse{}, err
 	}
 
 	record, err := service.pipeline.Run(ctx, deploy.Request{
-		AppID:   app.ID,
-		GitURL:  app.GitUrl,
-		Branch:  app.Branch,
-		Secrets: secrets,
+		AppID:        app.ID,
+		GitURL:       app.GitUrl,
+		Branch:       app.Branch,
+		InternalPort: app.InternalPort,
+		Env:          env,
+		Secrets:      secrets,
 	})
 	if err != nil {
 		return deploymentResponseFromRecord(record), err
@@ -53,21 +55,23 @@ func (service storeDeploymentService) ListDeployments(ctx context.Context, appID
 	return responses, nil
 }
 
-func (service storeDeploymentService) secretValues(ctx context.Context, appID string) ([]string, error) {
+func (service storeDeploymentService) envAndSecretValues(ctx context.Context, appID string) (map[string]string, []string, error) {
 	if service.envVars == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	envVars, err := service.envVars.ListEnvVars(ctx, appID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	env := make(map[string]string, len(envVars))
 	secrets := make([]string, 0, len(envVars))
 	for _, envVar := range envVars {
+		env[envVar.Key] = envVar.Value
 		if envVar.IsSecret {
 			secrets = append(secrets, envVar.Value)
 		}
 	}
-	return secrets, nil
+	return env, secrets, nil
 }
 
 func deploymentResponseFromRecord(record deploy.DeploymentRecord) DeploymentResponse {

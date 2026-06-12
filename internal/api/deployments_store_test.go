@@ -13,6 +13,11 @@ func TestStoreDeploymentServiceRunsPipelineAndListsDeployments(t *testing.T) {
 	ctx := context.Background()
 	queries, closeDB := setupAppForDeploymentServiceTest(t, ctx)
 	defer closeDB()
+	envVars := newFakeEnvVarService()
+	envVars.values = []api.EnvVar{
+		{AppID: "app_1", Key: "DATABASE_URL", Value: "postgres://internal", IsSecret: true},
+		{AppID: "app_1", Key: "PUBLIC_URL", Value: "https://web.example.com", IsSecret: false},
+	}
 
 	pipeline := deploy.Pipeline{
 		Store: deploy.NewStoreDeploymentStore(queries, func() string {
@@ -27,11 +32,17 @@ func TestStoreDeploymentServiceRunsPipelineAndListsDeployments(t *testing.T) {
 		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
 			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1", Log: "built\n"}, nil
 		}),
-		Runner: deploy.RunnerFunc(func(context.Context, deploy.RunRequest) (string, error) {
+		Runner: deploy.RunnerFunc(func(_ context.Context, req deploy.RunRequest) (string, error) {
+			if req.InternalPort != 3000 {
+				t.Fatalf("internal port = %d, want 3000", req.InternalPort)
+			}
+			if req.Env["DATABASE_URL"] != "postgres://internal" || req.Env["PUBLIC_URL"] != "https://web.example.com" {
+				t.Fatalf("env = %#v", req.Env)
+			}
 			return "started\n", nil
 		}),
 	}
-	service := api.NewStoreDeploymentService(queries, pipeline, nil)
+	service := api.NewStoreDeploymentService(queries, pipeline, envVars)
 
 	deployment, err := service.DeployApp(ctx, "app_1")
 	if err != nil {
