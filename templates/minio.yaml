@@ -1,0 +1,27 @@
+slug: minio
+name: MinIO
+description: S3-compatible object storage with a public console.
+category: storage
+docs_url: https://min.io/docs/minio/container/index.html
+logo: minio
+image: minio/minio:latest
+command:
+  - server
+  - /data
+  - --console-address
+  - :9001
+internal_port: 9001
+exposed: true
+variables:
+  MINIO_ROOT_USER: porter
+  MINIO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MINIO}
+volumes:
+  - name: data
+    path: /data
+provides:
+  SERVICE_URL: ${SERVICE_URL}
+  S3_ENDPOINT: http://${SERVICE_HOST}:9000
+  S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+healthcheck:
+  command: curl -fsS http://127.0.0.1:9000/minio/health/live

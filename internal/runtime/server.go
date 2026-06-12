@@ -21,20 +21,23 @@ import (
 	dockerstage "github.com/6space7/porter/internal/docker"
 	frontendhandler "github.com/6space7/porter/internal/frontend"
 	"github.com/6space7/porter/internal/proxy"
+	"github.com/6space7/porter/internal/services"
 	"github.com/6space7/porter/internal/store"
+	servicetemplates "github.com/6space7/porter/templates"
 )
 
 type Options struct {
-	Resolver     proxy.Resolver
-	SecretBox    *secretcrypto.SecretBox
-	Cloner       deploy.Cloner
-	Builder      deploy.Builder
-	Runner       deploy.Runner
-	AppRuntime   api.AppRuntime
-	RuntimeLogs  api.RuntimeLogStreamer
-	ImagePruner  api.ImagePruner
-	CaddyRuntime proxy.CaddyRuntime
-	CaddyAdmin   proxy.CaddyAdmin
+	Resolver       proxy.Resolver
+	SecretBox      *secretcrypto.SecretBox
+	Cloner         deploy.Cloner
+	Builder        deploy.Builder
+	Runner         deploy.Runner
+	AppRuntime     api.AppRuntime
+	RuntimeLogs    api.RuntimeLogStreamer
+	ImagePruner    api.ImagePruner
+	ServiceRuntime api.ServiceRuntime
+	CaddyRuntime   proxy.CaddyRuntime
+	CaddyAdmin     proxy.CaddyAdmin
 }
 
 func NewHandler(ctx context.Context, cfg config.Config) (*store.DB, http.Handler, error) {
@@ -57,6 +60,11 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		}
 	}
 	envVars := api.NewStoreEnvVarService(queries, secretBox)
+	serviceCatalog, err := services.LoadCatalog(servicetemplates.FS())
+	if err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
 	defaultStages, err := defaultDeploymentStages(cfg)
 	if err != nil {
 		_ = db.Close()
@@ -133,6 +141,11 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		}),
 		Logs:     api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
 		CaddyAsk: caddyAsk,
+		Services: api.NewStoreServiceManagerWithOptions(queries, serviceCatalog, envVars, secretBox, api.StoreServiceManagerOptions{
+			Runtime:      chooseServiceRuntime(opts.ServiceRuntime, defaultStages.ServiceRuntime),
+			RouteUpdater: routeUpdater,
+			PublicIP:     cfg.PublicIP,
+		}),
 	})
 	handler := frontendhandler.NewHandler(apiHandler, uifrontend.Dist())
 	return db, handler, nil
@@ -230,12 +243,13 @@ func bootstrapAdminUser(ctx context.Context, queries *store.Queries, email, pass
 }
 
 type deploymentStages struct {
-	Cloner      deploy.Cloner
-	Builder     deploy.Builder
-	Runner      deploy.Runner
-	AppRuntime  api.AppRuntime
-	RuntimeLogs api.RuntimeLogStreamer
-	ImagePruner api.ImagePruner
+	Cloner         deploy.Cloner
+	Builder        deploy.Builder
+	Runner         deploy.Runner
+	AppRuntime     api.AppRuntime
+	RuntimeLogs    api.RuntimeLogStreamer
+	ImagePruner    api.ImagePruner
+	ServiceRuntime api.ServiceRuntime
 }
 
 func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
@@ -244,12 +258,13 @@ func defaultDeploymentStages(cfg config.Config) (deploymentStages, error) {
 		return deploymentStages{}, err
 	}
 	return deploymentStages{
-		Cloner:      deploy.GitCloner{Root: cfg.WorkspacePath},
-		Builder:     dockerstage.Builder{Images: backend, Nixpacks: dockerstage.NixpacksCLI{}},
-		Runner:      dockerstage.Runner{Containers: backend},
-		AppRuntime:  dockerstage.AppController{Containers: backend},
-		RuntimeLogs: dockerstage.RuntimeLogs{Containers: backend},
-		ImagePruner: backend,
+		Cloner:         deploy.GitCloner{Root: cfg.WorkspacePath},
+		Builder:        dockerstage.Builder{Images: backend, Nixpacks: dockerstage.NixpacksCLI{}},
+		Runner:         dockerstage.Runner{Containers: backend},
+		AppRuntime:     dockerstage.AppController{Containers: backend},
+		RuntimeLogs:    dockerstage.RuntimeLogs{Containers: backend},
+		ImagePruner:    backend,
+		ServiceRuntime: dockerstage.ServiceRunner{Backend: backend},
 	}, nil
 }
 
@@ -295,6 +310,13 @@ func chooseImagePruner(override api.ImagePruner, fallback api.ImagePruner) api.I
 	return fallback
 }
 
+func chooseServiceRuntime(override api.ServiceRuntime, fallback api.ServiceRuntime) api.ServiceRuntime {
+	if override != nil {
+		return override
+	}
+	return fallback
+}
+
 func bootstrapAdminToken(ctx context.Context, queries *store.Queries, hash string) error {
 	hash = strings.TrimSpace(hash)
 	if hash == "" {
@@ -316,7 +338,7 @@ func bootstrapAdminToken(ctx context.Context, queries *store.Queries, hash strin
 		ID:     "tok_bootstrap",
 		Name:   "bootstrap",
 		Hash:   hash,
-		Scopes: "projects:read,projects:write,apps:read,apps:write,apps:deploy",
+		Scopes: "projects:read,projects:write,apps:read,apps:write,apps:deploy,services:read,services:write",
 	})
 	if err != nil {
 		return fmt.Errorf("create bootstrap token: %w", err)

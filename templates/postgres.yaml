@@ -1,0 +1,20 @@
+slug: postgres
+name: PostgreSQL
+description: Durable relational database for app data.
+category: database
+docs_url: https://www.postgresql.org/docs/
+logo: postgres
+image: postgres:16-alpine
+internal_port: 5432
+exposed: false
+variables:
+  POSTGRES_DB: app
+  POSTGRES_USER: porter
+  POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+volumes:
+  - name: data
+    path: /var/lib/postgresql/data
+provides:
+  DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${SERVICE_HOST}:5432/${POSTGRES_DB}
+healthcheck:
+  command: pg_isready -U ${POSTGRES_USER}

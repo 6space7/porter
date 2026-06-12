@@ -1,0 +1,21 @@
+slug: wordpress
+name: WordPress
+description: CMS and publishing app, normally attached to MySQL.
+category: cms
+docs_url: https://wordpress.org/documentation/
+logo: wordpress
+image: wordpress:php8.3-apache
+internal_port: 80
+exposed: true
+variables:
+  WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST}
+  WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+  WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+  WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+volumes:
+  - name: html
+    path: /var/www/html
+provides:
+  SERVICE_URL: ${SERVICE_URL}
+healthcheck:
+  command: curl -fsS http://127.0.0.1/

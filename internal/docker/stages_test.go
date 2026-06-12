@@ -11,6 +11,7 @@ import (
 
 	"github.com/6space7/porter/internal/deploy"
 	dockerstage "github.com/6space7/porter/internal/docker"
+	"github.com/6space7/porter/internal/services"
 )
 
 func TestBuilderBuildsDeterministicImageTagFromSourceDir(t *testing.T) {
@@ -149,6 +150,46 @@ func TestRunnerCreatesNetworkAndReplacesContainerWithSafeDefaults(t *testing.T) 
 	}
 }
 
+func TestServiceRunnerPullsImageAndRunsServiceContainer(t *testing.T) {
+	backend := &fakeServiceBackend{log: "service started\n"}
+	runner := dockerstage.ServiceRunner{Backend: backend}
+
+	log, err := runner.DeployService(context.Background(), services.DeployRequest{
+		ServiceID:     "svc_1",
+		Image:         "postgres:16-alpine",
+		Command:       []string{"postgres"},
+		ContainerName: "porter-svc-svc_1",
+		InternalPort:  5432,
+		Env:           map[string]string{"POSTGRES_PASSWORD": "secret"},
+		Volumes:       []services.VolumeSpec{{Name: "data", Path: "/var/lib/postgresql/data"}},
+	})
+	if err != nil {
+		t.Fatalf("deploy service: %v", err)
+	}
+	if log != "service started\n" {
+		t.Fatalf("log = %q", log)
+	}
+	if backend.pulledImage != "postgres:16-alpine" || backend.networkName != "porter-proxy" {
+		t.Fatalf("backend = %#v", backend)
+	}
+	spec := backend.spec
+	if spec.Name != "porter-svc-svc_1" || spec.ImageTag != "postgres:16-alpine" || spec.InternalPort != 5432 {
+		t.Fatalf("spec identity = %#v", spec)
+	}
+	if !reflect.DeepEqual(spec.Command, []string{"postgres"}) {
+		t.Fatalf("command = %#v", spec.Command)
+	}
+	if !reflect.DeepEqual(spec.Env, []string{"POSTGRES_PASSWORD=secret"}) {
+		t.Fatalf("env = %#v", spec.Env)
+	}
+	if len(spec.Mounts) != 1 || spec.Mounts[0].Source != "porter-svc-svc_1-data" || spec.Mounts[0].Target != "/var/lib/postgresql/data" {
+		t.Fatalf("mounts = %#v", spec.Mounts)
+	}
+	if spec.Privileged || !reflect.DeepEqual(spec.CapDrop, []string{"ALL"}) {
+		t.Fatalf("unsafe spec = %#v", spec)
+	}
+}
+
 func TestRuntimeLogsStreamsSanitizedAppContainerLogs(t *testing.T) {
 	containers := &fakeRuntimeLogBackend{stream: io.NopCloser(strings.NewReader("live\n"))}
 	runtimeLogs := dockerstage.RuntimeLogs{Containers: containers}
@@ -236,6 +277,28 @@ func (backend *fakeContainerBackend) EnsureNetwork(_ context.Context, name strin
 }
 
 func (backend *fakeContainerBackend) ReplaceContainer(_ context.Context, spec dockerstage.ContainerSpec) (string, error) {
+	backend.spec = spec
+	return backend.log, nil
+}
+
+type fakeServiceBackend struct {
+	pulledImage string
+	networkName string
+	spec        dockerstage.ContainerSpec
+	log         string
+}
+
+func (backend *fakeServiceBackend) PullImage(_ context.Context, image string) error {
+	backend.pulledImage = image
+	return nil
+}
+
+func (backend *fakeServiceBackend) EnsureNetwork(_ context.Context, name string) error {
+	backend.networkName = name
+	return nil
+}
+
+func (backend *fakeServiceBackend) ReplaceContainer(_ context.Context, spec dockerstage.ContainerSpec) (string, error) {
 	backend.spec = spec
 	return backend.log, nil
 }

@@ -11,7 +11,9 @@ import (
 	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -19,6 +21,7 @@ import (
 func TestSDKBackendImplementsStageBackends(t *testing.T) {
 	var _ dockerstage.ImageBackend = (*dockerstage.SDKBackend)(nil)
 	var _ dockerstage.ContainerBackend = (*dockerstage.SDKBackend)(nil)
+	var _ dockerstage.ServiceBackend = (*dockerstage.SDKBackend)(nil)
 	var _ dockerstage.LifecycleBackend = (*dockerstage.SDKBackend)(nil)
 }
 
@@ -72,9 +75,11 @@ func TestSDKBackendReplaceContainerUsesSafeOptions(t *testing.T) {
 	log, err := backend.ReplaceContainer(context.Background(), dockerstage.ContainerSpec{
 		Name:         "porter-app_1",
 		ImageTag:     "porter/app_1:dep_1",
+		Command:      []string{"npm", "start"},
 		NetworkName:  "porter-app_1",
 		InternalPort: 8080,
 		Env:          []string{"PORT=8080"},
+		Mounts:       []dockerstage.VolumeMount{{Source: "porter-data", Target: "/data"}},
 		Privileged:   false,
 		CapDrop:      []string{"ALL"},
 		MemoryBytes:  512 * 1024 * 1024,
@@ -93,6 +98,12 @@ func TestSDKBackendReplaceContainerUsesSafeOptions(t *testing.T) {
 	if client.createdName != "porter-app_1" || client.containerConfig.Image != "porter/app_1:dep_1" {
 		t.Fatalf("create = %q %#v", client.createdName, client.containerConfig)
 	}
+	if len(client.containerConfig.Cmd) != 2 || client.containerConfig.Cmd[0] != "npm" || client.containerConfig.Cmd[1] != "start" {
+		t.Fatalf("cmd = %#v", client.containerConfig.Cmd)
+	}
+	if len(client.hostConfig.Mounts) != 1 || client.hostConfig.Mounts[0].Type != mount.TypeVolume || client.hostConfig.Mounts[0].Source != "porter-data" || client.hostConfig.Mounts[0].Target != "/data" {
+		t.Fatalf("mounts = %#v", client.hostConfig.Mounts)
+	}
 	if client.hostConfig.Privileged {
 		t.Fatal("container must not be privileged")
 	}
@@ -107,6 +118,20 @@ func TestSDKBackendReplaceContainerUsesSafeOptions(t *testing.T) {
 	}
 	if client.startedID != "container_1" {
 		t.Fatalf("started id = %q", client.startedID)
+	}
+}
+
+func TestSDKBackendPullsServiceImages(t *testing.T) {
+	client := &fakeDockerClient{
+		imagePullResponse: io.NopCloser(strings.NewReader("pulled\n")),
+	}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	if err := backend.PullImage(context.Background(), "postgres:16-alpine"); err != nil {
+		t.Fatalf("pull image: %v", err)
+	}
+	if client.pulledImage != "postgres:16-alpine" {
+		t.Fatalf("pulled image = %q", client.pulledImage)
 	}
 }
 
@@ -246,6 +271,8 @@ type fakeDockerClient struct {
 	removedImage       string
 	imageRemoveOptions image.RemoveOptions
 	imageRemoveError   error
+	pulledImage        string
+	imagePullResponse  io.ReadCloser
 
 	containerConfig container.Config
 	hostConfig      container.HostConfig
@@ -268,6 +295,18 @@ func (client *fakeDockerClient) ImageRemove(_ context.Context, imageID string, o
 	client.removedImage = imageID
 	client.imageRemoveOptions = options
 	return nil, client.imageRemoveError
+}
+
+func (client *fakeDockerClient) ImagePull(_ context.Context, ref string, _ image.PullOptions) (io.ReadCloser, error) {
+	client.pulledImage = ref
+	if client.imagePullResponse != nil {
+		return client.imagePullResponse, nil
+	}
+	return io.NopCloser(strings.NewReader("")), nil
+}
+
+func (client *fakeDockerClient) VolumeCreate(_ context.Context, options volume.CreateOptions) (volume.Volume, error) {
+	return volume.Volume{Name: options.Name}, nil
 }
 
 func (client *fakeDockerClient) ContainerRemove(_ context.Context, containerID string, options container.RemoveOptions) error {

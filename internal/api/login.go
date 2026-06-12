@@ -210,7 +210,7 @@ func (service storeAuthService) CreateToken(ctx context.Context, name string, sc
 }
 
 func AdminScopes() []string {
-	return []string{"projects:read", "projects:write", "apps:read", "apps:write", "apps:deploy", "tokens:write"}
+	return []string{"projects:read", "projects:write", "apps:read", "apps:write", "apps:deploy", "services:read", "services:write", "tokens:write"}
 }
 
 func normalizeRequestedScopes(input []string) ([]string, bool) {

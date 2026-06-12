@@ -1,0 +1,18 @@
+slug: ghost
+name: Ghost
+description: Publishing platform with a public HTTPS site.
+category: cms
+docs_url: https://ghost.org/docs/
+logo: ghost
+image: ghost:5-alpine
+internal_port: 2368
+exposed: true
+variables:
+  url: ${SERVICE_URL}
+volumes:
+  - name: content
+    path: /var/lib/ghost/content
+provides:
+  SERVICE_URL: ${SERVICE_URL}
+healthcheck:
+  command: wget -qO- http://127.0.0.1:2368/ghost/api/admin/site/

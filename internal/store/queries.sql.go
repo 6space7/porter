@@ -172,6 +172,82 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 	return i, err
 }
 
+const createService = `-- name: CreateService :one
+insert into services (
+	id,
+	project_id,
+	server_id,
+	template_slug,
+	name,
+	status,
+	generated_secrets,
+	internal_port,
+	exposed,
+	hostname
+)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+returning id, project_id, server_id, template_slug, name, status, generated_secrets, internal_port, exposed, hostname, created_at, updated_at
+`
+
+type CreateServiceParams struct {
+	ID               string         `json:"id"`
+	ProjectID        string         `json:"project_id"`
+	ServerID         string         `json:"server_id"`
+	TemplateSlug     string         `json:"template_slug"`
+	Name             string         `json:"name"`
+	Status           string         `json:"status"`
+	GeneratedSecrets string         `json:"generated_secrets"`
+	InternalPort     int64          `json:"internal_port"`
+	Exposed          int64          `json:"exposed"`
+	Hostname         sql.NullString `json:"hostname"`
+}
+
+type CreateServiceRow struct {
+	ID               string         `json:"id"`
+	ProjectID        string         `json:"project_id"`
+	ServerID         string         `json:"server_id"`
+	TemplateSlug     string         `json:"template_slug"`
+	Name             string         `json:"name"`
+	Status           string         `json:"status"`
+	GeneratedSecrets string         `json:"generated_secrets"`
+	InternalPort     int64          `json:"internal_port"`
+	Exposed          int64          `json:"exposed"`
+	Hostname         sql.NullString `json:"hostname"`
+	CreatedAt        string         `json:"created_at"`
+	UpdatedAt        string         `json:"updated_at"`
+}
+
+func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (CreateServiceRow, error) {
+	row := q.queryRow(ctx, q.createServiceStmt, createService,
+		arg.ID,
+		arg.ProjectID,
+		arg.ServerID,
+		arg.TemplateSlug,
+		arg.Name,
+		arg.Status,
+		arg.GeneratedSecrets,
+		arg.InternalPort,
+		arg.Exposed,
+		arg.Hostname,
+	)
+	var i CreateServiceRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ServerID,
+		&i.TemplateSlug,
+		&i.Name,
+		&i.Status,
+		&i.GeneratedSecrets,
+		&i.InternalPort,
+		&i.Exposed,
+		&i.Hostname,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createToken = `-- name: CreateToken :one
 insert into tokens (id, name, hash, scopes)
 values (?, ?, ?, ?)
@@ -382,6 +458,47 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getService = `-- name: GetService :one
+select id, project_id, server_id, template_slug, name, status, generated_secrets, internal_port, exposed, hostname, created_at, updated_at
+from services
+where id = ?
+`
+
+type GetServiceRow struct {
+	ID               string         `json:"id"`
+	ProjectID        string         `json:"project_id"`
+	ServerID         string         `json:"server_id"`
+	TemplateSlug     string         `json:"template_slug"`
+	Name             string         `json:"name"`
+	Status           string         `json:"status"`
+	GeneratedSecrets string         `json:"generated_secrets"`
+	InternalPort     int64          `json:"internal_port"`
+	Exposed          int64          `json:"exposed"`
+	Hostname         sql.NullString `json:"hostname"`
+	CreatedAt        string         `json:"created_at"`
+	UpdatedAt        string         `json:"updated_at"`
+}
+
+func (q *Queries) GetService(ctx context.Context, id string) (GetServiceRow, error) {
+	row := q.queryRow(ctx, q.getServiceStmt, getService, id)
+	var i GetServiceRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ServerID,
+		&i.TemplateSlug,
+		&i.Name,
+		&i.Status,
+		&i.GeneratedSecrets,
+		&i.InternalPort,
+		&i.Exposed,
+		&i.Hostname,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -656,17 +773,79 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 	return items, nil
 }
 
+const listServices = `-- name: ListServices :many
+select id, project_id, server_id, template_slug, name, status, generated_secrets, internal_port, exposed, hostname, created_at, updated_at
+from services
+order by created_at desc, name asc
+`
+
+type ListServicesRow struct {
+	ID               string         `json:"id"`
+	ProjectID        string         `json:"project_id"`
+	ServerID         string         `json:"server_id"`
+	TemplateSlug     string         `json:"template_slug"`
+	Name             string         `json:"name"`
+	Status           string         `json:"status"`
+	GeneratedSecrets string         `json:"generated_secrets"`
+	InternalPort     int64          `json:"internal_port"`
+	Exposed          int64          `json:"exposed"`
+	Hostname         sql.NullString `json:"hostname"`
+	CreatedAt        string         `json:"created_at"`
+	UpdatedAt        string         `json:"updated_at"`
+}
+
+func (q *Queries) ListServices(ctx context.Context) ([]ListServicesRow, error) {
+	rows, err := q.query(ctx, q.listServicesStmt, listServices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListServicesRow
+	for rows.Next() {
+		var i ListServicesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.ServerID,
+			&i.TemplateSlug,
+			&i.Name,
+			&i.Status,
+			&i.GeneratedSecrets,
+			&i.InternalPort,
+			&i.Exposed,
+			&i.Hostname,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVerifiedProxyRoutes = `-- name: ListVerifiedProxyRoutes :many
-select domains.hostname, apps.id as app_id, apps.internal_port
+select domains.hostname, 'app' as target_type, apps.id as target_id, apps.internal_port
 from domains
 join apps on apps.id = domains.app_id
 where domains.verified = 1
-order by domains.hostname asc
+union all
+select services.hostname, 'service' as target_type, services.id as target_id, services.internal_port
+from services
+where services.exposed = 1 and services.hostname is not null and services.hostname <> ''
+order by hostname asc
 `
 
 type ListVerifiedProxyRoutesRow struct {
 	Hostname     string `json:"hostname"`
-	AppID        string `json:"app_id"`
+	TargetType   string `json:"target_type"`
+	TargetID     string `json:"target_id"`
 	InternalPort int64  `json:"internal_port"`
 }
 
@@ -679,7 +858,12 @@ func (q *Queries) ListVerifiedProxyRoutes(ctx context.Context) ([]ListVerifiedPr
 	var items []ListVerifiedProxyRoutesRow
 	for rows.Next() {
 		var i ListVerifiedProxyRoutesRow
-		if err := rows.Scan(&i.Hostname, &i.AppID, &i.InternalPort); err != nil {
+		if err := rows.Scan(
+			&i.Hostname,
+			&i.TargetType,
+			&i.TargetID,
+			&i.InternalPort,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

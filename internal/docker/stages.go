@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/6space7/porter/internal/deploy"
+	"github.com/6space7/porter/internal/services"
 )
 
 const (
@@ -32,6 +33,12 @@ type ContainerBackend interface {
 	ReplaceContainer(ctx context.Context, spec ContainerSpec) (string, error)
 }
 
+type ServiceBackend interface {
+	PullImage(ctx context.Context, image string) error
+	EnsureNetwork(ctx context.Context, name string) error
+	ReplaceContainer(ctx context.Context, spec ContainerSpec) (string, error)
+}
+
 type RuntimeLogBackend interface {
 	StreamContainerLogs(ctx context.Context, containerName string) (io.ReadCloser, error)
 }
@@ -45,13 +52,20 @@ type LifecycleBackend interface {
 type ContainerSpec struct {
 	Name         string
 	ImageTag     string
+	Command      []string
 	NetworkName  string
 	InternalPort int64
 	Env          []string
+	Mounts       []VolumeMount
 	Privileged   bool
 	CapDrop      []string
 	MemoryBytes  int64
 	NanoCPUs     int64
+}
+
+type VolumeMount struct {
+	Source string
+	Target string
 }
 
 type Builder struct {
@@ -118,6 +132,10 @@ type Runner struct {
 	Containers ContainerBackend
 }
 
+type ServiceRunner struct {
+	Backend ServiceBackend
+}
+
 type RuntimeLogs struct {
 	Containers RuntimeLogBackend
 }
@@ -154,6 +172,52 @@ func (runner Runner) Run(ctx context.Context, req deploy.RunRequest) (string, er
 		MemoryBytes:  defaultMemoryBytes,
 		NanoCPUs:     defaultNanoCPUs,
 	})
+}
+
+func (runner ServiceRunner) DeployService(ctx context.Context, req services.DeployRequest) (string, error) {
+	if runner.Backend == nil {
+		return "", fmt.Errorf("service backend is required")
+	}
+	if req.Image == "" {
+		return "", fmt.Errorf("service image is required")
+	}
+	if req.ContainerName == "" {
+		return "", fmt.Errorf("service container name is required")
+	}
+	if err := runner.Backend.PullImage(ctx, req.Image); err != nil {
+		return "", err
+	}
+	networkName := ProxyNetworkName()
+	if err := runner.Backend.EnsureNetwork(ctx, networkName); err != nil {
+		return "", err
+	}
+	return runner.Backend.ReplaceContainer(ctx, ContainerSpec{
+		Name:         req.ContainerName,
+		ImageTag:     req.Image,
+		Command:      append([]string(nil), req.Command...),
+		NetworkName:  networkName,
+		InternalPort: req.InternalPort,
+		Env:          envList(req.Env),
+		Mounts:       serviceMounts(req.ServiceID, req.Volumes),
+		Privileged:   false,
+		CapDrop:      []string{"ALL"},
+		MemoryBytes:  defaultMemoryBytes,
+		NanoCPUs:     defaultNanoCPUs,
+	})
+}
+
+func serviceMounts(serviceID string, volumes []services.VolumeSpec) []VolumeMount {
+	if len(volumes) == 0 {
+		return nil
+	}
+	mounts := make([]VolumeMount, 0, len(volumes))
+	for _, volume := range volumes {
+		mounts = append(mounts, VolumeMount{
+			Source: ServiceVolumeName(serviceID, volume.Name),
+			Target: volume.Path,
+		})
+	}
+	return mounts
 }
 
 func (logs RuntimeLogs) StreamRuntimeLogs(ctx context.Context, appID string) (io.ReadCloser, error) {
@@ -202,6 +266,14 @@ func ImageTag(appID, deploymentID string) string {
 
 func ContainerName(appID string) string {
 	return "porter-" + sanitizeDockerName(appID)
+}
+
+func ServiceContainerName(serviceID string) string {
+	return "porter-svc-" + sanitizeDockerName(serviceID)
+}
+
+func ServiceVolumeName(serviceID, volumeName string) string {
+	return ServiceContainerName(serviceID) + "-" + sanitizeDockerName(volumeName)
 }
 
 func ProxyNetworkName() string {

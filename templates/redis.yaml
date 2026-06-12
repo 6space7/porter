@@ -1,0 +1,21 @@
+slug: redis
+name: Redis
+description: In-memory cache, queue, and key-value store.
+category: cache
+docs_url: https://redis.io/docs/latest/
+logo: redis
+image: redis:7-alpine
+command:
+  - redis-server
+  - --appendonly
+  - "yes"
+internal_port: 6379
+exposed: false
+variables: {}
+volumes:
+  - name: data
+    path: /data
+provides:
+  REDIS_URL: redis://${SERVICE_HOST}:6379
+healthcheck:
+  command: redis-cli ping

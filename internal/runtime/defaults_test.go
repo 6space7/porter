@@ -34,4 +34,7 @@ func TestDefaultDeploymentStagesUseGitAndDockerBackends(t *testing.T) {
 	if stages.ImagePruner == nil {
 		t.Fatal("image pruner must be configured")
 	}
+	if stages.ServiceRuntime == nil {
+		t.Fatal("service runtime must be configured")
+	}
 }

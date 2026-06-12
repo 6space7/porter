@@ -23,6 +23,32 @@ returning id, name, created_at, updated_at;
 delete from projects
 where id = ?;
 
+-- name: CreateService :one
+insert into services (
+	id,
+	project_id,
+	server_id,
+	template_slug,
+	name,
+	status,
+	generated_secrets,
+	internal_port,
+	exposed,
+	hostname
+)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+returning id, project_id, server_id, template_slug, name, status, generated_secrets, internal_port, exposed, hostname, created_at, updated_at;
+
+-- name: GetService :one
+select id, project_id, server_id, template_slug, name, status, generated_secrets, internal_port, exposed, hostname, created_at, updated_at
+from services
+where id = ?;
+
+-- name: ListServices :many
+select id, project_id, server_id, template_slug, name, status, generated_secrets, internal_port, exposed, hostname, created_at, updated_at
+from services
+order by created_at desc, name asc;
+
 -- name: CreateApp :one
 insert into apps (
 	id,
@@ -107,11 +133,15 @@ where app_id = ?
 order by created_at asc;
 
 -- name: ListVerifiedProxyRoutes :many
-select domains.hostname, apps.id as app_id, apps.internal_port
+select domains.hostname, 'app' as target_type, apps.id as target_id, apps.internal_port
 from domains
 join apps on apps.id = domains.app_id
 where domains.verified = 1
-order by domains.hostname asc;
+union all
+select services.hostname, 'service' as target_type, services.id as target_id, services.internal_port
+from services
+where services.exposed = 1 and services.hostname is not null and services.hostname <> ''
+order by hostname asc;
 
 -- name: DeleteDomain :exec
 delete from domains

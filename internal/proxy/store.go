@@ -23,9 +23,13 @@ func (source storeRouteSource) ListRoutes(ctx context.Context) ([]Route, error) 
 
 	routes := make([]Route, 0, len(rows))
 	for _, row := range rows {
+		containerName := docker.ContainerName(row.TargetID)
+		if row.TargetType == "service" {
+			containerName = docker.ServiceContainerName(row.TargetID)
+		}
 		routes = append(routes, Route{
 			Hostname:      row.Hostname,
-			ContainerName: docker.ContainerName(row.AppID),
+			ContainerName: containerName,
 			InternalPort:  row.InternalPort,
 		})
 	}

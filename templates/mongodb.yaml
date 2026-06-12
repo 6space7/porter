@@ -1,0 +1,19 @@
+slug: mongodb
+name: MongoDB
+description: Document database for JSON-like application data.
+category: database
+docs_url: https://www.mongodb.com/docs/
+logo: mongodb
+image: mongo:7
+internal_port: 27017
+exposed: false
+variables:
+  MONGO_INITDB_ROOT_USERNAME: porter
+  MONGO_INITDB_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGO}
+volumes:
+  - name: data
+    path: /data/db
+provides:
+  MONGODB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@${SERVICE_HOST}:27017/admin
+healthcheck:
+  command: mongosh --eval "db.adminCommand('ping')"

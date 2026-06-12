@@ -2,6 +2,7 @@ package proxy_test
 
 import (
 	"context"
+	"database/sql"
 	"reflect"
 	"testing"
 
@@ -45,6 +46,20 @@ func TestStoreRouteSourceListsVerifiedDomainRoutes(t *testing.T) {
 			t.Fatalf("create domain %s: %v", domain.ID, err)
 		}
 	}
+	if _, err := queries.CreateService(ctx, store.CreateServiceParams{
+		ID:               "svc_flows",
+		ProjectID:        "proj_1",
+		ServerID:         "local",
+		TemplateSlug:     "n8n",
+		Name:             "flows",
+		Status:           "running",
+		GeneratedSecrets: "encrypted",
+		InternalPort:     5678,
+		Exposed:          1,
+		Hostname:         sql.NullString{String: "flows.203-0-113-42.sslip.io", Valid: true},
+	}); err != nil {
+		t.Fatalf("create service: %v", err)
+	}
 
 	source := proxy.NewStoreRouteSource(queries)
 	routes, err := source.ListRoutes(ctx)
@@ -53,6 +68,7 @@ func TestStoreRouteSourceListsVerifiedDomainRoutes(t *testing.T) {
 	}
 
 	want := []proxy.Route{
+		{Hostname: "flows.203-0-113-42.sslip.io", ContainerName: "porter-svc-svc_flows", InternalPort: 5678},
 		{Hostname: "web.203-0-113-42.sslip.io", ContainerName: "porter-app_web", InternalPort: 3000},
 		{Hostname: "web.example.com", ContainerName: "porter-app_web", InternalPort: 3000},
 	}

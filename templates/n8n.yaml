@@ -1,0 +1,21 @@
+slug: n8n
+name: n8n
+description: Workflow automation with a public HTTPS editor.
+category: automation
+docs_url: https://docs.n8n.io/
+logo: n8n
+image: n8nio/n8n:latest
+internal_port: 5678
+exposed: true
+variables:
+  N8N_HOST: ${SERVICE_DOMAIN}
+  N8N_PROTOCOL: https
+  WEBHOOK_URL: ${SERVICE_URL}
+  N8N_ENCRYPTION_KEY: ${SERVICE_PASSWORD_ENCRYPTION}
+volumes:
+  - name: data
+    path: /home/node/.n8n
+provides:
+  SERVICE_URL: ${SERVICE_URL}
+healthcheck:
+  command: wget -qO- http://127.0.0.1:5678/healthz

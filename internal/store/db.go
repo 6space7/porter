@@ -39,6 +39,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createProjectStmt, err = db.PrepareContext(ctx, createProject); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateProject: %w", err)
 	}
+	if q.createServiceStmt, err = db.PrepareContext(ctx, createService); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateService: %w", err)
+	}
 	if q.createTokenStmt, err = db.PrepareContext(ctx, createToken); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateToken: %w", err)
 	}
@@ -75,6 +78,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getProjectStmt, err = db.PrepareContext(ctx, getProject); err != nil {
 		return nil, fmt.Errorf("error preparing query GetProject: %w", err)
 	}
+	if q.getServiceStmt, err = db.PrepareContext(ctx, getService); err != nil {
+		return nil, fmt.Errorf("error preparing query GetService: %w", err)
+	}
 	if q.getTokenByHashStmt, err = db.PrepareContext(ctx, getTokenByHash); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTokenByHash: %w", err)
 	}
@@ -98,6 +104,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listProjectsStmt, err = db.PrepareContext(ctx, listProjects); err != nil {
 		return nil, fmt.Errorf("error preparing query ListProjects: %w", err)
+	}
+	if q.listServicesStmt, err = db.PrepareContext(ctx, listServices); err != nil {
+		return nil, fmt.Errorf("error preparing query ListServices: %w", err)
 	}
 	if q.listVerifiedProxyRoutesStmt, err = db.PrepareContext(ctx, listVerifiedProxyRoutes); err != nil {
 		return nil, fmt.Errorf("error preparing query ListVerifiedProxyRoutes: %w", err)
@@ -154,6 +163,11 @@ func (q *Queries) Close() error {
 	if q.createProjectStmt != nil {
 		if cerr := q.createProjectStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createProjectStmt: %w", cerr)
+		}
+	}
+	if q.createServiceStmt != nil {
+		if cerr := q.createServiceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createServiceStmt: %w", cerr)
 		}
 	}
 	if q.createTokenStmt != nil {
@@ -216,6 +230,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getProjectStmt: %w", cerr)
 		}
 	}
+	if q.getServiceStmt != nil {
+		if cerr := q.getServiceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getServiceStmt: %w", cerr)
+		}
+	}
 	if q.getTokenByHashStmt != nil {
 		if cerr := q.getTokenByHashStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getTokenByHashStmt: %w", cerr)
@@ -254,6 +273,11 @@ func (q *Queries) Close() error {
 	if q.listProjectsStmt != nil {
 		if cerr := q.listProjectsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listProjectsStmt: %w", cerr)
+		}
+	}
+	if q.listServicesStmt != nil {
+		if cerr := q.listServicesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listServicesStmt: %w", cerr)
 		}
 	}
 	if q.listVerifiedProxyRoutesStmt != nil {
@@ -345,6 +369,7 @@ type Queries struct {
 	createDeploymentStmt        *sql.Stmt
 	createDomainStmt            *sql.Stmt
 	createProjectStmt           *sql.Stmt
+	createServiceStmt           *sql.Stmt
 	createTokenStmt             *sql.Stmt
 	createUserStmt              *sql.Stmt
 	deleteAppStmt               *sql.Stmt
@@ -357,6 +382,7 @@ type Queries struct {
 	getDomainStmt               *sql.Stmt
 	getDomainByHostnameStmt     *sql.Stmt
 	getProjectStmt              *sql.Stmt
+	getServiceStmt              *sql.Stmt
 	getTokenByHashStmt          *sql.Stmt
 	getUserByEmailStmt          *sql.Stmt
 	listAppsStmt                *sql.Stmt
@@ -365,6 +391,7 @@ type Queries struct {
 	listDomainsByAppStmt        *sql.Stmt
 	listEnvVarsByAppStmt        *sql.Stmt
 	listProjectsStmt            *sql.Stmt
+	listServicesStmt            *sql.Stmt
 	listVerifiedProxyRoutesStmt *sql.Stmt
 	updateAppStmt               *sql.Stmt
 	updateAppBuildTypeStmt      *sql.Stmt
@@ -385,6 +412,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createDeploymentStmt:        q.createDeploymentStmt,
 		createDomainStmt:            q.createDomainStmt,
 		createProjectStmt:           q.createProjectStmt,
+		createServiceStmt:           q.createServiceStmt,
 		createTokenStmt:             q.createTokenStmt,
 		createUserStmt:              q.createUserStmt,
 		deleteAppStmt:               q.deleteAppStmt,
@@ -397,6 +425,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getDomainStmt:               q.getDomainStmt,
 		getDomainByHostnameStmt:     q.getDomainByHostnameStmt,
 		getProjectStmt:              q.getProjectStmt,
+		getServiceStmt:              q.getServiceStmt,
 		getTokenByHashStmt:          q.getTokenByHashStmt,
 		getUserByEmailStmt:          q.getUserByEmailStmt,
 		listAppsStmt:                q.listAppsStmt,
@@ -405,6 +434,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listDomainsByAppStmt:        q.listDomainsByAppStmt,
 		listEnvVarsByAppStmt:        q.listEnvVarsByAppStmt,
 		listProjectsStmt:            q.listProjectsStmt,
+		listServicesStmt:            q.listServicesStmt,
 		listVerifiedProxyRoutesStmt: q.listVerifiedProxyRoutesStmt,
 		updateAppStmt:               q.updateAppStmt,
 		updateAppBuildTypeStmt:      q.updateAppBuildTypeStmt,

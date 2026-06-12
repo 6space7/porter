@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -23,6 +24,7 @@ import (
 
 type dockerClient interface {
 	ImageBuild(ctx context.Context, buildContext io.Reader, options build.ImageBuildOptions) (build.ImageBuildResponse, error)
+	ImagePull(ctx context.Context, ref string, options image.PullOptions) (io.ReadCloser, error)
 	ImageRemove(ctx context.Context, imageID string, options image.RemoveOptions) ([]image.DeleteResponse, error)
 	ContainerRemove(ctx context.Context, containerID string, options container.RemoveOptions) error
 	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
@@ -79,6 +81,24 @@ func (backend *SDKBackend) BuildImage(ctx context.Context, sourceDir, imageTag s
 	return log, nil
 }
 
+func (backend *SDKBackend) PullImage(ctx context.Context, imageRef string) error {
+	if backend == nil || backend.client == nil {
+		return fmt.Errorf("docker client is required")
+	}
+	if imageRef == "" {
+		return fmt.Errorf("image ref is required")
+	}
+	response, err := backend.client.ImagePull(ctx, imageRef, image.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("pull image: %w", err)
+	}
+	defer response.Close()
+	if _, err := io.Copy(io.Discard, response); err != nil {
+		return fmt.Errorf("read image pull output: %w", err)
+	}
+	return nil
+}
+
 func (backend *SDKBackend) EnsureNetwork(ctx context.Context, name string) error {
 	if backend == nil || backend.client == nil {
 		return fmt.Errorf("docker client is required")
@@ -107,6 +127,7 @@ func (backend *SDKBackend) ReplaceContainer(ctx context.Context, spec ContainerS
 
 	config := &container.Config{
 		Image: spec.ImageTag,
+		Cmd:   spec.Command,
 		Env:   spec.Env,
 		Labels: map[string]string{
 			"porter.managed": "true",
@@ -116,6 +137,7 @@ func (backend *SDKBackend) ReplaceContainer(ctx context.Context, spec ContainerS
 		NetworkMode: container.NetworkMode(spec.NetworkName),
 		Privileged:  spec.Privileged,
 		CapDrop:     spec.CapDrop,
+		Mounts:      dockerMounts(spec.Mounts),
 		Resources: container.Resources{
 			Memory:   spec.MemoryBytes,
 			NanoCPUs: spec.NanoCPUs,
@@ -136,6 +158,21 @@ func (backend *SDKBackend) ReplaceContainer(ctx context.Context, spec ContainerS
 		return "", fmt.Errorf("start container: %w", err)
 	}
 	return fmt.Sprintf("container %s started\n", created.ID), nil
+}
+
+func dockerMounts(input []VolumeMount) []mount.Mount {
+	if len(input) == 0 {
+		return nil
+	}
+	mounts := make([]mount.Mount, 0, len(input))
+	for _, item := range input {
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeVolume,
+			Source: item.Source,
+			Target: item.Target,
+		})
+	}
+	return mounts
 }
 
 func (backend *SDKBackend) StartContainer(ctx context.Context, containerName string) error {

@@ -68,15 +68,18 @@ type Server struct {
 }
 
 type Service struct {
-	ID               string `json:"id"`
-	ProjectID        string `json:"project_id"`
-	ServerID         string `json:"server_id"`
-	TemplateSlug     string `json:"template_slug"`
-	Name             string `json:"name"`
-	Status           string `json:"status"`
-	GeneratedSecrets string `json:"generated_secrets"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
+	ID               string         `json:"id"`
+	ProjectID        string         `json:"project_id"`
+	ServerID         string         `json:"server_id"`
+	TemplateSlug     string         `json:"template_slug"`
+	Name             string         `json:"name"`
+	Status           string         `json:"status"`
+	GeneratedSecrets string         `json:"generated_secrets"`
+	CreatedAt        string         `json:"created_at"`
+	UpdatedAt        string         `json:"updated_at"`
+	InternalPort     int64          `json:"internal_port"`
+	Exposed          int64          `json:"exposed"`
+	Hostname         sql.NullString `json:"hostname"`
 }
 
 type Token struct {

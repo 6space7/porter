@@ -1,0 +1,18 @@
+slug: plausible
+name: Plausible
+description: Privacy-friendly web analytics service.
+category: analytics
+docs_url: https://plausible.io/docs/self-hosting
+logo: plausible
+image: plausible/analytics:latest
+internal_port: 8000
+exposed: true
+variables:
+  BASE_URL: ${SERVICE_URL}
+  SECRET_KEY_BASE: ${SERVICE_PASSWORD_SECRET_KEY_BASE}
+  DISABLE_REGISTRATION: "true"
+volumes: []
+provides:
+  SERVICE_URL: ${SERVICE_URL}
+healthcheck:
+  command: curl -fsS http://127.0.0.1:8000/
