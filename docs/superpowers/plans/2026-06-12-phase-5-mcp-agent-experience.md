@@ -177,7 +177,7 @@ Expected: PASS.
 - Modify: `internal/runtime/server.go`
 - Modify: `README.md`
 
-- [ ] **Step 1: Add failing docs tests**
+- [x] **Step 1: Add failing docs tests**
 
 Test:
 
@@ -194,7 +194,7 @@ go test ./internal/docs ./internal/runtime -count=1
 
 Expected: FAIL because docs package does not exist.
 
-- [ ] **Step 2: Implement static docs handler**
+- [x] **Step 2: Implement static docs handler**
 
 Serve concise content generated from a fixed `Docs` struct. Include:
 
@@ -205,11 +205,11 @@ Core JSON API base: /api/v1
 Tool names and required scopes
 ```
 
-- [ ] **Step 3: Mount before SPA fallback**
+- [x] **Step 3: Mount before SPA fallback**
 
 Wrap docs, API, MCP, and frontend under one top-level handler so `/llms.txt` is not swallowed by the SPA.
 
-- [ ] **Step 4: Verify docs tests**
+- [x] **Step 4: Verify docs tests**
 
 Run:
 

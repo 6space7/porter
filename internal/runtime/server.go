@@ -19,6 +19,7 @@ import (
 	secretcrypto "github.com/6space7/porter/internal/crypto"
 	"github.com/6space7/porter/internal/deploy"
 	dockerstage "github.com/6space7/porter/internal/docker"
+	"github.com/6space7/porter/internal/docs"
 	frontendhandler "github.com/6space7/porter/internal/frontend"
 	portermcp "github.com/6space7/porter/internal/mcp"
 	"github.com/6space7/porter/internal/proxy"
@@ -166,7 +167,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		Services:      serviceManager,
 		MCP:           mcpsdkserver.NewStreamableHTTPServer(mcpServer),
 	})
-	handler := frontendhandler.NewHandler(apiHandler, uifrontend.Dist())
+	handler := docs.NewHandler(docs.Config{PlatformDomain: cfg.PlatformDomain}, frontendhandler.NewHandler(apiHandler, uifrontend.Dist()))
 	return db, handler, nil
 }
 

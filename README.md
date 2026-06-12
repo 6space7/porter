@@ -29,8 +29,10 @@ routing, stored build logs, runtime log streaming, deployment history with
 one-click rollback/image retention, source install, secure secret handling, and
 an embedded Svelte web UI for the core one-server workflows. It also supports
 Dockerfile-less Nixpacks builds, service catalog templates, internal service
-attachment, and public HTTPS service routes. Remaining phases add MCP,
-multi-server deploys, GitHub auto-deploy, and release lifecycle automation.
+attachment, public HTTPS service routes, an authenticated MCP HTTP endpoint,
+and machine-readable agent docs. Remaining work in Phase 5 adds dashboard
+onboarding for agents; later phases add multi-server deploys, GitHub
+auto-deploy, and release lifecycle automation.
 
 Verified on 2026-06-12:
 
@@ -60,6 +62,11 @@ Verified on 2026-06-12:
   `DATABASE_URL`, and reached from the deployed app container.
 - an exposed n8n service receives a generated sslip.io hostname and serves the
   editor over HTTPS through Caddy.
+- `/api/v1/mcp` is mounted behind the same bearer-token auth as the JSON API,
+  with tools for projects, apps, env vars, deployments/logs, rollback,
+  service catalog operations, service attach, and latest-deployment diagnosis.
+- `/llms.txt` and `/api/v1/docs` expose concise machine-readable agent
+  onboarding docs, including auth, endpoint, tool, scope, and example payloads.
 
 Local browser checks also cover the embedded UI login/logout flow, apps
 dashboard, app creation form, app detail actions, domains, environment editor,
@@ -87,6 +94,26 @@ make verify
 
 At runtime, open the install URL in a browser to use the dashboard. The UI is a
 client of the public `/api/v1` API and does not use private in-process hooks.
+
+## Agent Docs and MCP
+
+porter serves agent-readable docs from the same binary:
+
+- `GET /llms.txt`
+- `GET /api/v1/docs`
+- `POST /api/v1/mcp`
+
+MCP requests use the same scoped porter tokens as the JSON API:
+
+```text
+Authorization: Bearer <porter token>
+```
+
+Core tools include `porter_list_projects`, `porter_create_app`,
+`porter_deploy_app`, `porter_set_env_var`, `porter_get_build_log`,
+`porter_get_runtime_logs`, `porter_rollback_app`,
+`porter_search_service_templates`, `porter_deploy_service`,
+`porter_attach_service`, and `porter_diagnose_latest_deployment`.
 
 ## Source Install
 
