@@ -25,6 +25,7 @@
   export let onDeleted: () => void
 
   let activeAppID = ''
+  let activeAppEditKey = ''
   let error = ''
   let detailBusy = false
   let domains: Domain[] = []
@@ -44,13 +45,23 @@
   let envValue = ''
   let envSecret = true
 
-  $: if (app && app.id !== activeAppID) {
-    activeAppID = app.id
-    editName = app.name
-    editBranch = app.branch
-    editGitURL = app.git_url
-    editPort = app.internal_port
-    void loadDetail()
+  $: if (app) {
+    const appEditKey = [app.id, app.name, app.branch, app.git_url, app.internal_port].join('\u0000')
+    const appChanged = app.id !== activeAppID
+    if (appEditKey !== activeAppEditKey) {
+      activeAppEditKey = appEditKey
+      editName = app.name
+      editBranch = app.branch
+      editGitURL = app.git_url
+      editPort = app.internal_port
+    }
+    if (appChanged) {
+      activeAppID = app.id
+      void loadDetail()
+    }
+  } else if (!app && activeAppID) {
+    activeAppID = ''
+    activeAppEditKey = ''
   }
 
   onDestroy(() => {

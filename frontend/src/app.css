@@ -378,18 +378,18 @@ label {
 }
 
 .app-table {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .app-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.7fr) minmax(80px, 0.7fr) 80px minmax(80px, 0.7fr) 44px 32px;
+  grid-template-columns: minmax(150px, 1.6fr) minmax(64px, 0.7fr) 76px minmax(64px, 0.7fr) 36px 24px;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
   width: 100%;
   border-bottom: 1px solid var(--line);
-  padding: 12px 16px;
+  padding: 12px;
   text-align: left;
 }
 
