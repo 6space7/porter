@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/6space7/porter/internal/api"
@@ -84,7 +86,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 	}
 	if caddyAdmin != nil {
 		reconciler := proxy.Reconciler{
-			Source: proxy.NewStoreRouteSource(queries),
+			Source: routeSource(queries, cfg),
 			Admin:  caddyAdmin,
 			AskURL: cfg.CaddyAskURL,
 		}
@@ -98,6 +100,10 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		Cloner:  chooseCloner(opts.Cloner, defaultStages.Cloner),
 		Builder: chooseBuilder(opts.Builder, defaultStages.Builder),
 		Runner:  chooseRunner(opts.Runner, defaultStages.Runner),
+	}
+	caddyAsk := api.NewStoreCaddyAskService(queries)
+	if strings.TrimSpace(cfg.PlatformDomain) != "" {
+		caddyAsk = api.NewStaticDomainCaddyAskService(caddyAsk, cfg.PlatformDomain)
 	}
 	handler := api.NewRouterWithDeps(api.Dependencies{
 		Auth:          api.NewStoreAuthService(queries),
@@ -113,9 +119,62 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		EnvVars:     envVars,
 		Deployments: api.NewStoreDeploymentService(queries, pipeline, envVars),
 		Logs:        api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
-		CaddyAsk:    api.NewStoreCaddyAskService(queries),
+		CaddyAsk:    caddyAsk,
 	})
 	return db, handler, nil
+}
+
+func routeSource(queries *store.Queries, cfg config.Config) proxy.RouteSource {
+	source := proxy.NewStoreRouteSource(queries)
+	if strings.TrimSpace(cfg.PlatformDomain) == "" {
+		return source
+	}
+	return platformRouteSource{
+		next:     source,
+		hostname: cfg.PlatformDomain,
+		upstream: defaultString(cfg.PlatformUpstream, "host.docker.internal:8080"),
+	}
+}
+
+type platformRouteSource struct {
+	next     proxy.RouteSource
+	hostname string
+	upstream string
+}
+
+func (source platformRouteSource) ListRoutes(ctx context.Context) ([]proxy.Route, error) {
+	routes, err := source.next.ListRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	host, port, err := splitUpstream(source.upstream)
+	if err != nil {
+		return nil, err
+	}
+	return append(routes, proxy.Route{
+		Hostname:      source.hostname,
+		ContainerName: host,
+		InternalPort:  port,
+	}), nil
+}
+
+func splitUpstream(upstream string) (string, int64, error) {
+	host, portString, err := net.SplitHostPort(upstream)
+	if err != nil {
+		return "", 0, fmt.Errorf("platform upstream must be host:port: %w", err)
+	}
+	port, err := strconv.ParseInt(portString, 10, 64)
+	if err != nil {
+		return "", 0, fmt.Errorf("platform upstream port is invalid: %w", err)
+	}
+	return host, port, nil
+}
+
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 func bootstrapAdminUser(ctx context.Context, queries *store.Queries, email, passwordFile string) error {

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -13,6 +14,33 @@ type CaddyAskService interface {
 
 type caddyAskHandler struct {
 	service CaddyAskService
+}
+
+type staticDomainCaddyAskService struct {
+	next      CaddyAskService
+	hostnames map[string]struct{}
+}
+
+func NewStaticDomainCaddyAskService(next CaddyAskService, hostnames ...string) CaddyAskService {
+	allowed := make(map[string]struct{}, len(hostnames))
+	for _, hostname := range hostnames {
+		hostname = strings.ToLower(strings.TrimSpace(hostname))
+		if hostname != "" {
+			allowed[hostname] = struct{}{}
+		}
+	}
+	return staticDomainCaddyAskService{next: next, hostnames: allowed}
+}
+
+func (service staticDomainCaddyAskService) IsDomainAllowed(ctx context.Context, hostname string) (bool, error) {
+	hostname = strings.ToLower(strings.TrimSpace(hostname))
+	if _, ok := service.hostnames[hostname]; ok {
+		return true, nil
+	}
+	if service.next == nil {
+		return false, nil
+	}
+	return service.next.IsDomainAllowed(ctx, hostname)
 }
 
 func mountCaddyAskRoutes(router chi.Router, service CaddyAskService) {

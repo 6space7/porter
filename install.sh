@@ -91,9 +91,18 @@ detect_public_ip() {
 	curl -fsS https://api.ipify.org || true
 }
 
+platform_domain() {
+	local public_ip="$1"
+	if [[ -z "${public_ip}" ]]; then
+		return
+	fi
+	printf 'porter.%s.sslip.io' "${public_ip//./-}"
+}
+
 write_env_file() {
 	local bootstrap_password=""
 	local public_ip=""
+	local domain=""
 
 	if [[ -f "${PORTER_ENV_FILE}" ]]; then
 		chmod 0600 "${PORTER_ENV_FILE}"
@@ -102,18 +111,23 @@ write_env_file() {
 
 	bootstrap_password="$(new_password)"
 	public_ip="$(detect_public_ip)"
+	domain="$(platform_domain "${public_ip}")"
 
 	{
 		echo "PORTER_HTTP_ADDR=:8080"
 		echo "PORTER_DATABASE_PATH=${PORTER_DATA_DIR}/porter.db"
 		echo "PORTER_WORKSPACE_PATH=${PORTER_WORKSPACE_DIR}"
-		echo "PORTER_CADDY_ASK_URL=http://127.0.0.1:8080/api/v1/caddy/ask"
+		echo "PORTER_CADDY_ASK_URL=http://host.docker.internal:8080/api/v1/caddy/ask"
 		echo "PORTER_MANAGE_CADDY=true"
+		echo "PORTER_PLATFORM_UPSTREAM=host.docker.internal:8080"
 		echo "PORTER_MASTER_KEY_PATH=${PORTER_MASTER_KEY}"
 		echo "PORTER_BOOTSTRAP_ADMIN_EMAIL=${PORTER_ADMIN_EMAIL}"
 		echo "PORTER_BOOTSTRAP_ADMIN_PASSWORD_FILE=${PORTER_INITIAL_PASSWORD}"
 		if [[ -n "${public_ip}" ]]; then
 			echo "PORTER_PUBLIC_IP=${public_ip}"
+		fi
+		if [[ -n "${domain}" ]]; then
+			echo "PORTER_PLATFORM_DOMAIN=${domain}"
 		fi
 	} > "${PORTER_ENV_FILE}"
 	chmod 0600 "${PORTER_ENV_FILE}"
@@ -160,9 +174,22 @@ start_service() {
 }
 
 print_summary() {
+	local platform_url=""
+	if [[ -r "${PORTER_ENV_FILE}" ]]; then
+		# shellcheck disable=SC1090
+		source "${PORTER_ENV_FILE}"
+		if [[ -n "${PORTER_PLATFORM_DOMAIN:-}" ]]; then
+			platform_url="https://${PORTER_PLATFORM_DOMAIN}"
+		fi
+	fi
+
 	echo
 	echo "porter is installed."
-	echo "API: http://127.0.0.1:8080"
+	if [[ -n "${platform_url}" ]]; then
+		echo "Dashboard/API: ${platform_url}"
+	else
+		echo "API: http://127.0.0.1:8080"
+	fi
 	if [[ -f "${PORTER_INITIAL_PASSWORD}" ]]; then
 		echo "Initial admin email: ${PORTER_ADMIN_EMAIL}"
 		echo "Initial admin password:"

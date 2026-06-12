@@ -74,6 +74,7 @@ func (runtime *DockerCaddyRuntime) EnsureCaddy(ctx context.Context, spec CaddyCo
 			spec.DataVolume + ":/data",
 		},
 		NetworkMode: container.NetworkMode(spec.NetworkName),
+		ExtraHosts:  []string{"host.docker.internal:host-gateway"},
 		PortBindings: nat.PortMap{
 			tcpPort(spec.HTTPPort): {
 				{HostIP: "0.0.0.0", HostPort: strconv.Itoa(spec.HTTPPort)},

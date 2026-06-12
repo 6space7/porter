@@ -67,6 +67,9 @@ func TestDockerCaddyRuntimeEnsuresCaddyContainer(t *testing.T) {
 	if client.hostConfig.NetworkMode != container.NetworkMode("porter-proxy") {
 		t.Fatalf("network mode = %q", client.hostConfig.NetworkMode)
 	}
+	if !containsString(client.hostConfig.ExtraHosts, "host.docker.internal:host-gateway") {
+		t.Fatalf("extra hosts = %#v", client.hostConfig.ExtraHosts)
+	}
 	if client.hostConfig.Privileged {
 		t.Fatal("caddy container must not be privileged")
 	}

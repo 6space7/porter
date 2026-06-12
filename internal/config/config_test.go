@@ -16,6 +16,31 @@ func TestLoadEnablesManagedCaddyByDefault(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsCaddyAskURLForManagedDockerCaddy(t *testing.T) {
+	t.Setenv("PORTER_CADDY_ASK_URL", "")
+
+	cfg := config.Load()
+
+	if cfg.CaddyAskURL != "http://host.docker.internal:8080/api/v1/caddy/ask" {
+		t.Fatalf("caddy ask url = %q", cfg.CaddyAskURL)
+	}
+}
+
+func TestLoadGeneratesPlatformDomainFromPublicIP(t *testing.T) {
+	t.Setenv("PORTER_PUBLIC_IP", "203.0.113.42")
+	t.Setenv("PORTER_PLATFORM_DOMAIN", "")
+	t.Setenv("PORTER_PLATFORM_UPSTREAM", "")
+
+	cfg := config.Load()
+
+	if cfg.PlatformDomain != "porter.203-0-113-42.sslip.io" {
+		t.Fatalf("platform domain = %q", cfg.PlatformDomain)
+	}
+	if cfg.PlatformUpstream != "host.docker.internal:8080" {
+		t.Fatalf("platform upstream = %q", cfg.PlatformUpstream)
+	}
+}
+
 func TestLoadCanDisableManagedCaddy(t *testing.T) {
 	t.Setenv("PORTER_MANAGE_CADDY", "false")
 

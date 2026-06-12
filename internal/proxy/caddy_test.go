@@ -52,6 +52,10 @@ func TestCaddyAdminClientAppliesConfigToAdminAPI(t *testing.T) {
 	if upstreams[0].(map[string]any)["dial"] != "porter-app_web:3000" {
 		t.Fatalf("upstreams = %#v", upstreams)
 	}
+	tlsPolicies := porter["tls_connection_policies"].([]any)
+	if len(tlsPolicies) != 1 {
+		t.Fatalf("tls connection policies = %#v", tlsPolicies)
+	}
 
 	tlsApp := apps["tls"].(map[string]any)
 	automation := tlsApp["automation"].(map[string]any)

@@ -72,8 +72,9 @@ func toCaddyAdminConfig(config CaddyConfig) map[string]any {
 			"http": map[string]any{
 				"servers": map[string]any{
 					"porter": map[string]any{
-						"listen": []string{":80", ":443"},
-						"routes": routes,
+						"listen":                  []string{":80", ":443"},
+						"routes":                  routes,
+						"tls_connection_policies": []any{map[string]any{}},
 					},
 				},
 			},
