@@ -352,7 +352,7 @@ label {
 .inspector,
 .create-panel,
 .settings-panel,
-.services-placeholder,
+.services-panel,
 .app-table-shell {
   min-width: 0;
 }
@@ -360,7 +360,7 @@ label {
 .app-table-shell,
 .create-panel,
 .settings-panel,
-.services-placeholder,
+.services-panel,
 .inspector {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -466,12 +466,13 @@ label {
 
 .create-panel,
 .settings-panel,
-.services-placeholder {
+.services-panel {
   padding-bottom: 16px;
 }
 
 .create-panel .compact-form,
-.settings-panel .compact-form {
+.settings-panel .compact-form,
+.services-panel .compact-form {
   padding: 16px;
 }
 
@@ -596,6 +597,104 @@ label {
   color: var(--ink);
   font-size: 18px;
   text-transform: none;
+}
+
+.service-toolbar {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.service-error {
+  margin: 12px 16px 0;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.service-card {
+  display: grid;
+  gap: 8px;
+  min-height: 128px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fcfdfa;
+  color: var(--muted);
+  padding: 12px;
+  text-align: left;
+}
+
+.service-card.selected,
+.service-card:hover {
+  border-color: rgba(15, 143, 114, 0.4);
+  background: #f2f7f2;
+  color: var(--ink);
+}
+
+.service-card-head {
+  display: grid;
+  gap: 2px;
+}
+
+.service-card-head strong {
+  color: var(--ink);
+}
+
+.service-card-head small,
+.service-card > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-create-form,
+.service-attach-form,
+.service-list,
+.service-output {
+  border-bottom: 1px solid var(--line);
+}
+
+.service-list,
+.service-output {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.service-output {
+  background: #f2f7f2;
+}
+
+.service-output .split-heading span,
+.service-list .split-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.output-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.output-grid.compact {
+  padding: 0;
+}
+
+.output-grid code {
+  overflow: auto;
+  border-radius: 6px;
+  background: #0d120f;
+  color: #d8f6e7;
+  padding: 9px;
+  font: 12px/1.45 var(--mono);
 }
 
 .service-rules,
@@ -723,5 +822,9 @@ label {
   .app-row > span:nth-child(5),
   .app-row > span:nth-child(6) {
     display: none;
+  }
+
+  .catalog-grid {
+    grid-template-columns: 1fr;
   }
 }

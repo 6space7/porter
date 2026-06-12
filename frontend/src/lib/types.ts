@@ -29,6 +29,54 @@ export type EnvVar = {
   is_secret: boolean
 }
 
+export type ServiceTemplate = {
+  slug: string
+  name: string
+  description: string
+  category: string
+  docs_url: string
+  logo: string
+  image: string
+  command?: string[]
+  internal_port: number
+  exposed: boolean
+  variables: Record<string, string>
+  provides: Record<string, string>
+  volumes: Array<{ name: string; path: string }>
+  healthcheck: { command: string }
+}
+
+export type Service = {
+  id: string
+  project_id: string
+  server_id: string
+  template_slug: string
+  name: string
+  status: string
+  internal_port: number
+  exposed: boolean
+  hostname?: string
+}
+
+export type CreateServiceInput = {
+  project_id: string
+  template_slug: string
+  name: string
+  exposed: boolean
+}
+
+export type CreateServiceResponse = {
+  service: Service
+  credentials: Record<string, string>
+  provides: Record<string, string>
+}
+
+export type AttachServiceResponse = {
+  service_id: string
+  app_id: string
+  env: Record<string, string>
+}
+
 export type Deployment = {
   id: string
   app_id: string

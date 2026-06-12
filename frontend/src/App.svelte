@@ -14,7 +14,7 @@
   import AppTable from './components/AppTable.svelte'
   import CreateAppPanel from './components/CreateAppPanel.svelte'
   import LoginView from './components/LoginView.svelte'
-  import ServicesPlaceholder from './components/ServicesPlaceholder.svelte'
+  import ServicesPanel from './components/ServicesPanel.svelte'
   import SettingsPanel from './components/SettingsPanel.svelte'
   import { describeError, PorterApi } from './lib/api'
   import type { ApiToken, App, CreateAppInput, Project } from './lib/types'
@@ -198,7 +198,7 @@
           {:else if activeView === 'create'}
             <CreateAppPanel {projects} {busy} onCreateProject={createProject} onCreateApp={createApp} />
           {:else if activeView === 'services'}
-            <ServicesPlaceholder />
+            <ServicesPanel {api} {projects} {apps} {busy} />
           {:else}
             <SettingsPanel
               {projects}

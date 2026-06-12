@@ -2,12 +2,17 @@ import type {
   ApiErrorBody,
   ApiToken,
   App,
+  AttachServiceResponse,
   CreateAppInput,
+  CreateServiceInput,
+  CreateServiceResponse,
   Deployment,
   Domain,
   EnvVar,
   NewEnvVarInput,
   Project,
+  Service,
+  ServiceTemplate,
   UpdateAppInput,
 } from './types'
 
@@ -132,6 +137,23 @@ export class PorterApi {
 
   async createToken(name: string, scopes: string[]) {
     return this.request<ApiToken>('POST', '/auth/tokens', { name, scopes })
+  }
+
+  async serviceTemplates(search = '') {
+    const query = search ? `?search=${encodeURIComponent(search)}` : ''
+    return this.request<ServiceTemplate[]>('GET', `/service-templates${query}`)
+  }
+
+  async services() {
+    return this.request<Service[]>('GET', '/services')
+  }
+
+  async createService(input: CreateServiceInput) {
+    return this.request<CreateServiceResponse>('POST', '/services', input as unknown as RequestBody)
+  }
+
+  async attachService(serviceID: string, appID: string) {
+    return this.request<AttachServiceResponse>('POST', `/services/${serviceID}/attach`, { app_id: appID })
   }
 
   runtimeLogURL(appID: string) {
