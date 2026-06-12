@@ -35,6 +35,10 @@ porter.exe
 *.tar.gz
 *.zip
 
+# Local worktrees
+.worktrees
+.worktrees/
+
 # Editor / OS
 .DS_Store
 Thumbs.db
