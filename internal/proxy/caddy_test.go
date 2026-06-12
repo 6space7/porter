@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -87,4 +88,40 @@ func TestCaddyAdminClientReturnsErrorOnFailedApply(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected failed admin response to return error")
 	}
+}
+
+func TestCaddyAdminClientRetriesTransientApplyErrors(t *testing.T) {
+	attempts := 0
+	httpClient := &http.Client{
+		Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			attempts++
+			if attempts == 1 {
+				return nil, errors.New("connection reset by peer")
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{},
+				Body:       http.NoBody,
+			}, nil
+		}),
+	}
+
+	admin := proxy.CaddyAdminClient{
+		BaseURL:     "http://127.0.0.1:2019",
+		HTTPClient:  httpClient,
+		MaxAttempts: 2,
+	}
+	err := admin.ApplyConfig(context.Background(), proxy.CaddyConfig{})
+	if err != nil {
+		t.Fatalf("apply config after transient error: %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }

@@ -8,11 +8,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type CaddyAdminClient struct {
-	BaseURL    string
-	HTTPClient *http.Client
+	BaseURL     string
+	HTTPClient  *http.Client
+	MaxAttempts int
+	RetryDelay  time.Duration
 }
 
 func (client CaddyAdminClient) ApplyConfig(ctx context.Context, config CaddyConfig) error {
@@ -25,27 +28,61 @@ func (client CaddyAdminClient) ApplyConfig(ctx context.Context, config CaddyConf
 		return fmt.Errorf("encode caddy config: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/load", bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create caddy request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
 	httpClient := client.HTTPClient
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("apply caddy config: %w", err)
+	maxAttempts := client.MaxAttempts
+	retryDelay := client.RetryDelay
+	if maxAttempts <= 0 {
+		maxAttempts = 20
+		if retryDelay == 0 {
+			retryDelay = 500 * time.Millisecond
+		}
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("caddy admin returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/load", bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("create caddy request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt < maxAttempts {
+				if err := sleepForRetry(ctx, retryDelay); err != nil {
+					return err
+				}
+				continue
+			}
+			return fmt.Errorf("apply caddy config: %w", lastErr)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			return fmt.Errorf("caddy admin returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		}
+		return nil
 	}
 	return nil
+}
+
+func sleepForRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func toCaddyAdminConfig(config CaddyConfig) map[string]any {
