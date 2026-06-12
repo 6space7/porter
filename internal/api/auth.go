@@ -115,6 +115,10 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	return principal, ok
 }
 
+func ContextWithPrincipal(ctx context.Context, principal Principal) context.Context {
+	return context.WithValue(ctx, principalContextKey{}, principal)
+}
+
 type principalContextKey struct{}
 type authSourceContextKey struct{}
 type authSource string

@@ -122,33 +122,49 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 	if strings.TrimSpace(cfg.PlatformDomain) != "" {
 		caddyAsk = api.NewStaticDomainCaddyAskService(caddyAsk, cfg.PlatformDomain)
 	}
+	authService := api.NewStoreAuthService(queries)
+	tokenVerifier := api.NewStoreTokenVerifier(queries)
+	projectService := api.NewStoreProjectService(queries, nil)
+	appService := api.NewStoreAppServiceWithOptions(queries, api.StoreAppServiceOptions{
+		PublicIP:     cfg.PublicIP,
+		RouteUpdater: routeUpdater,
+		Runtime:      chooseAppRuntime(opts.AppRuntime, defaultStages.AppRuntime),
+	})
+	domainService := api.NewStoreDomainService(queries, api.StoreDomainServiceOptions{
+		Resolver:     opts.Resolver,
+		ServerIP:     cfg.PublicIP,
+		RouteUpdater: routeUpdater,
+	})
+	deploymentService := api.NewStoreDeploymentServiceWithOptions(queries, pipeline, envVars, api.StoreDeploymentServiceOptions{
+		RouteUpdater: routeUpdater,
+		ImagePruner:  chooseImagePruner(opts.ImagePruner, defaultStages.ImagePruner),
+	})
+	logService := api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs))
+	serviceManager := api.NewStoreServiceManagerWithOptions(queries, serviceCatalog, envVars, secretBox, api.StoreServiceManagerOptions{
+		Runtime:      chooseServiceRuntime(opts.ServiceRuntime, defaultStages.ServiceRuntime),
+		RouteUpdater: routeUpdater,
+		PublicIP:     cfg.PublicIP,
+	})
+	mcpServer := portermcp.NewServer(portermcp.Dependencies{
+		Projects:    projectService,
+		Apps:        appService,
+		Deployments: deploymentService,
+		Logs:        logService,
+		Services:    serviceManager,
+		EnvVars:     envVars,
+	})
 	apiHandler := api.NewRouterWithDeps(api.Dependencies{
-		Auth:          api.NewStoreAuthService(queries),
-		TokenVerifier: api.NewStoreTokenVerifier(queries),
-		Projects:      api.NewStoreProjectService(queries, nil),
-		Apps: api.NewStoreAppServiceWithOptions(queries, api.StoreAppServiceOptions{
-			PublicIP:     cfg.PublicIP,
-			RouteUpdater: routeUpdater,
-			Runtime:      chooseAppRuntime(opts.AppRuntime, defaultStages.AppRuntime),
-		}),
-		Domains: api.NewStoreDomainService(queries, api.StoreDomainServiceOptions{
-			Resolver:     opts.Resolver,
-			ServerIP:     cfg.PublicIP,
-			RouteUpdater: routeUpdater,
-		}),
-		EnvVars: envVars,
-		Deployments: api.NewStoreDeploymentServiceWithOptions(queries, pipeline, envVars, api.StoreDeploymentServiceOptions{
-			RouteUpdater: routeUpdater,
-			ImagePruner:  chooseImagePruner(opts.ImagePruner, defaultStages.ImagePruner),
-		}),
-		Logs:     api.NewStoreLogService(queries, chooseRuntimeLogs(opts.RuntimeLogs, defaultStages.RuntimeLogs)),
-		CaddyAsk: caddyAsk,
-		Services: api.NewStoreServiceManagerWithOptions(queries, serviceCatalog, envVars, secretBox, api.StoreServiceManagerOptions{
-			Runtime:      chooseServiceRuntime(opts.ServiceRuntime, defaultStages.ServiceRuntime),
-			RouteUpdater: routeUpdater,
-			PublicIP:     cfg.PublicIP,
-		}),
-		MCP: mcpsdkserver.NewStreamableHTTPServer(portermcp.NewServer(portermcp.Dependencies{})),
+		Auth:          authService,
+		TokenVerifier: tokenVerifier,
+		Projects:      projectService,
+		Apps:          appService,
+		Domains:       domainService,
+		EnvVars:       envVars,
+		Deployments:   deploymentService,
+		Logs:          logService,
+		CaddyAsk:      caddyAsk,
+		Services:      serviceManager,
+		MCP:           mcpsdkserver.NewStreamableHTTPServer(mcpServer),
 	})
 	handler := frontendhandler.NewHandler(apiHandler, uifrontend.Dist())
 	return db, handler, nil

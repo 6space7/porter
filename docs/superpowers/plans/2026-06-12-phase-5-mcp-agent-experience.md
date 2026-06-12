@@ -19,17 +19,21 @@
 - Create: `internal/mcp/server_test.go`
 - Modify: `go.mod`, `go.sum`
 
-- [ ] **Step 1: Add failing tests for tool registration**
+- [x] **Step 1: Add failing tests for tool registration**
 
 Create `internal/mcp/server_test.go` with a test that builds an MCP handler from fake app/project/service/log dependencies, initializes it through an HTTP test server, and confirms `tools/list` includes:
 
 ```text
 porter_list_apps
+porter_list_projects
+porter_create_project
 porter_create_app
 porter_deploy_app
 porter_list_deployments
 porter_get_build_log
 porter_get_runtime_logs
+porter_list_env_vars
+porter_set_env_var
 porter_rollback_app
 porter_search_service_templates
 porter_deploy_service
@@ -45,7 +49,7 @@ go test ./internal/mcp -run TestServerListsPorterTools -count=1
 
 Expected: fails because `internal/mcp` does not exist.
 
-- [ ] **Step 2: Add dependency and minimal server**
+- [x] **Step 2: Add dependency and minimal server**
 
 Run:
 
@@ -61,7 +65,7 @@ server.NewMCPServer("porter", "0.5.0", server.WithToolCapabilities(false), serve
 
 Add each tool with `mcp.NewTool` and a stub handler returning `mcp.NewToolResultError("not implemented")`.
 
-- [ ] **Step 3: Verify registration passes**
+- [x] **Step 3: Verify registration passes**
 
 Run:
 
@@ -79,7 +83,7 @@ Expected: PASS.
 - Modify: `internal/runtime/server.go`
 - Create: `internal/api/mcp_test.go`
 
-- [ ] **Step 1: Add failing auth tests**
+- [x] **Step 1: Add failing auth tests**
 
 Create tests proving:
 
@@ -97,15 +101,15 @@ go test ./internal/api -run TestMCPRoutesRequireBearerAuth -count=1
 
 Expected: FAIL because the route is not mounted.
 
-- [ ] **Step 2: Mount MCP handler behind existing auth**
+- [x] **Step 2: Mount MCP handler behind existing auth**
 
 Add `MCP http.Handler` to `api.Dependencies`. In `NewRouterWithDeps`, mount it inside the protected group at `/mcp/*` after `RequireAuth`. Use token scopes inside MCP handlers by reading the existing principal from request context and passing it into the MCP request context.
 
-- [ ] **Step 3: Wire runtime dependencies**
+- [x] **Step 3: Wire runtime dependencies**
 
 In `runtime.NewHandlerWithOptions`, build an MCP server with the same store-backed services already used by the API and mount `server.NewStreamableHTTPServer(mcpServer, server.WithEndpointPath("/api/v1/mcp"))`.
 
-- [ ] **Step 4: Verify auth tests**
+- [x] **Step 4: Verify auth tests**
 
 Run:
 
@@ -122,15 +126,17 @@ Expected: PASS.
 - Modify: `internal/mcp/results.go`
 - Modify: `internal/mcp/server_test.go`
 
-- [ ] **Step 1: Add failing tool behavior tests**
+- [x] **Step 1: Add failing tool behavior tests**
 
 Add tests for:
 
 ```text
 porter_list_apps returns JSON app list
+porter_list_projects and porter_create_project return JSON project responses
 porter_create_app validates required fields and creates an app
 porter_deploy_app invokes deploy service and returns deployment JSON
 porter_get_build_log returns build log JSON
+porter_list_env_vars and porter_set_env_var mask secret values
 porter_search_service_templates filters templates
 porter_deploy_service requires services:write and returns service plus one-time credentials
 porter_attach_service writes service env vars to an app
@@ -145,15 +151,15 @@ go test ./internal/mcp -count=1
 
 Expected: FAIL on stubbed tool handlers.
 
-- [ ] **Step 2: Implement typed argument helpers**
+- [x] **Step 2: Implement typed argument helpers**
 
 Use `request.RequireString`, `request.GetString`, and `request.GetBool` helpers where available. Return `mcp.NewToolResultError(...)` for validation failures rather than Go errors so agents receive machine-readable tool failures.
 
-- [ ] **Step 3: Implement JSON text results**
+- [x] **Step 3: Implement JSON text results**
 
 Marshal API responses to indented JSON and return them with `mcp.NewToolResultText`. Masked API responses stay masked because the MCP package uses existing service interfaces.
 
-- [ ] **Step 4: Verify tool behavior tests**
+- [x] **Step 4: Verify tool behavior tests**
 
 Run:
 

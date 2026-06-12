@@ -8,6 +8,7 @@ import (
 const Version = "0.5.0"
 
 type Dependencies struct {
+	Projects    api.ProjectService
 	Apps        api.AppService
 	Deployments api.DeploymentService
 	Logs        api.LogService
