@@ -2,6 +2,7 @@ package docker_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -88,6 +90,26 @@ func TestSDKBackendReplaceContainerUsesSafeOptions(t *testing.T) {
 	}
 }
 
+func TestSDKBackendReplaceContainerIgnoresMissingExistingContainer(t *testing.T) {
+	client := &fakeDockerClient{
+		createID:    "container_1",
+		removeError: errdefs.NotFound(errors.New("no such container")),
+	}
+	backend := dockerstage.NewSDKBackendWithClient(client)
+
+	if _, err := backend.ReplaceContainer(context.Background(), dockerstage.ContainerSpec{
+		Name:        "porter-app_1",
+		ImageTag:    "porter/app_1:dep_1",
+		NetworkName: "porter-proxy",
+	}); err != nil {
+		t.Fatalf("replace container: %v", err)
+	}
+
+	if client.createdName != "porter-app_1" || client.startedID != "container_1" {
+		t.Fatalf("create/start = %q/%q", client.createdName, client.startedID)
+	}
+}
+
 func TestSDKBackendStreamsContainerLogs(t *testing.T) {
 	client := &fakeDockerClient{
 		logsResponse: io.NopCloser(strings.NewReader(multiplexedStdout("runtime line\n"))),
@@ -122,6 +144,7 @@ type fakeDockerClient struct {
 
 	removedName   string
 	removeOptions container.RemoveOptions
+	removeError   error
 	createdName   string
 	createID      string
 	startedID     string
@@ -144,7 +167,7 @@ func (client *fakeDockerClient) ImageBuild(_ context.Context, buildContext io.Re
 func (client *fakeDockerClient) ContainerRemove(_ context.Context, containerID string, options container.RemoveOptions) error {
 	client.removedName = containerID
 	client.removeOptions = options
-	return nil
+	return client.removeError
 }
 
 func (client *fakeDockerClient) NetworkCreate(_ context.Context, _ string, _ network.CreateOptions) (network.CreateResponse, error) {

@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -89,7 +90,7 @@ func (backend *SDKBackend) ReplaceContainer(ctx context.Context, spec ContainerS
 		return "", fmt.Errorf("docker client is required")
 	}
 
-	if err := backend.client.ContainerRemove(ctx, spec.Name, container.RemoveOptions{Force: true}); err != nil {
+	if err := backend.client.ContainerRemove(ctx, spec.Name, container.RemoveOptions{Force: true}); err != nil && !errdefs.IsNotFound(err) {
 		return "", fmt.Errorf("remove existing container: %w", err)
 	}
 
