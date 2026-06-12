@@ -19,6 +19,7 @@ type Dependencies struct {
 	Logs                LogService
 	CaddyAsk            CaddyAskService
 	Services            ServiceManager
+	MCP                 http.Handler
 }
 
 func NewRouter() http.Handler {
@@ -71,6 +72,9 @@ func NewRouterWithDeps(deps Dependencies) http.Handler {
 				}
 				if deps.Services != nil {
 					mountServiceRoutes(protected, deps.Services)
+				}
+				if deps.MCP != nil {
+					protected.Mount("/mcp", deps.MCP)
 				}
 			})
 		}

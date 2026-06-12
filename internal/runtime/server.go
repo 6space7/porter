@@ -20,10 +20,12 @@ import (
 	"github.com/6space7/porter/internal/deploy"
 	dockerstage "github.com/6space7/porter/internal/docker"
 	frontendhandler "github.com/6space7/porter/internal/frontend"
+	portermcp "github.com/6space7/porter/internal/mcp"
 	"github.com/6space7/porter/internal/proxy"
 	"github.com/6space7/porter/internal/services"
 	"github.com/6space7/porter/internal/store"
 	servicetemplates "github.com/6space7/porter/templates"
+	mcpsdkserver "github.com/mark3labs/mcp-go/server"
 )
 
 type Options struct {
@@ -146,6 +148,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 			RouteUpdater: routeUpdater,
 			PublicIP:     cfg.PublicIP,
 		}),
+		MCP: mcpsdkserver.NewStreamableHTTPServer(portermcp.NewServer(portermcp.Dependencies{})),
 	})
 	handler := frontendhandler.NewHandler(apiHandler, uifrontend.Dist())
 	return db, handler, nil
