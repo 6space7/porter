@@ -35,12 +35,12 @@ type GitCloner struct {
 	Runner CommandRunner
 }
 
-func (cloner GitCloner) Clone(ctx context.Context, req CloneRequest) (string, error) {
+func (cloner GitCloner) Clone(ctx context.Context, req CloneRequest) (CloneResult, error) {
 	if err := ValidateGitURL(req.GitURL); err != nil {
-		return "", err
+		return CloneResult{}, err
 	}
 	if err := ValidateGitBranch(req.Branch); err != nil {
-		return "", err
+		return CloneResult{}, err
 	}
 
 	root := cloner.Root
@@ -49,10 +49,10 @@ func (cloner GitCloner) Clone(ctx context.Context, req CloneRequest) (string, er
 	}
 	dest, err := safeJoin(root, req.AppID, req.DeploymentID, "source")
 	if err != nil {
-		return "", err
+		return CloneResult{}, err
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
-		return "", fmt.Errorf("create clone parent: %w", err)
+		return CloneResult{}, fmt.Errorf("create clone parent: %w", err)
 	}
 
 	runner := cloner.Runner
@@ -71,9 +71,9 @@ func (cloner GitCloner) Clone(ctx context.Context, req CloneRequest) (string, er
 		dest,
 	}, root)
 	if err != nil {
-		return string(output), fmt.Errorf("git clone: %w", err)
+		return CloneResult{SourceDir: dest, Log: string(output)}, fmt.Errorf("git clone: %w", err)
 	}
-	return string(output), nil
+	return CloneResult{SourceDir: dest, Log: string(output)}, nil
 }
 
 func ValidateGitURL(gitURL string) error {

@@ -24,10 +24,12 @@ const (
 )
 
 type Request struct {
-	AppID   string
-	GitURL  string
-	Branch  string
-	Secrets []string
+	AppID        string
+	GitURL       string
+	Branch       string
+	InternalPort int64
+	Env          map[string]string
+	Secrets      []string
 }
 
 type DeploymentRecord struct {
@@ -51,19 +53,25 @@ type CloneRequest struct {
 	Branch       string
 }
 
-type Cloner interface {
-	Clone(ctx context.Context, req CloneRequest) (string, error)
+type CloneResult struct {
+	SourceDir string
+	Log       string
 }
 
-type ClonerFunc func(ctx context.Context, req CloneRequest) (string, error)
+type Cloner interface {
+	Clone(ctx context.Context, req CloneRequest) (CloneResult, error)
+}
 
-func (fn ClonerFunc) Clone(ctx context.Context, req CloneRequest) (string, error) {
+type ClonerFunc func(ctx context.Context, req CloneRequest) (CloneResult, error)
+
+func (fn ClonerFunc) Clone(ctx context.Context, req CloneRequest) (CloneResult, error) {
 	return fn(ctx, req)
 }
 
 type BuildRequest struct {
 	AppID        string
 	DeploymentID string
+	SourceDir    string
 }
 
 type BuildResult struct {
@@ -85,6 +93,8 @@ type RunRequest struct {
 	AppID        string
 	DeploymentID string
 	ImageTag     string
+	InternalPort int64
+	Env          map[string]string
 }
 
 type Runner interface {
@@ -114,13 +124,13 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 	if err := pipeline.mark(ctx, &record, StatusRunning, StageCloning, logs.String(), ""); err != nil {
 		return record, err
 	}
-	cloneLog, err := pipeline.Cloner.Clone(ctx, CloneRequest{
+	cloneResult, err := pipeline.Cloner.Clone(ctx, CloneRequest{
 		AppID:        req.AppID,
 		DeploymentID: record.ID,
 		GitURL:       req.GitURL,
 		Branch:       req.Branch,
 	})
-	logs.WriteString(cloneLog)
+	logs.WriteString(cloneResult.Log)
 	if err != nil {
 		return pipeline.fail(ctx, record, StageCloning, logs.String(), req.Secrets, err)
 	}
@@ -131,6 +141,7 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 	buildResult, err := pipeline.Builder.Build(ctx, BuildRequest{
 		AppID:        req.AppID,
 		DeploymentID: record.ID,
+		SourceDir:    cloneResult.SourceDir,
 	})
 	logs.WriteString(buildResult.Log)
 	if err != nil {
@@ -144,6 +155,8 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 		AppID:        req.AppID,
 		DeploymentID: record.ID,
 		ImageTag:     buildResult.ImageTag,
+		InternalPort: req.InternalPort,
+		Env:          copyEnv(req.Env),
 	})
 	logs.WriteString(runLog)
 	if err != nil {
@@ -154,6 +167,17 @@ func (pipeline Pipeline) Run(ctx context.Context, req Request) (DeploymentRecord
 		return record, err
 	}
 	return record, nil
+}
+
+func copyEnv(env map[string]string) map[string]string {
+	if env == nil {
+		return nil
+	}
+	copied := make(map[string]string, len(env))
+	for key, value := range env {
+		copied[key] = value
+	}
+	return copied
 }
 
 func (pipeline Pipeline) mark(ctx context.Context, record *DeploymentRecord, status Status, stage Stage, buildLog, imageTag string) error {

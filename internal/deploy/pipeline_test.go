@@ -14,14 +14,14 @@ func TestPipelineRecordsSuccessfulStagesInOrder(t *testing.T) {
 	store := &fakeDeploymentStore{}
 	pipeline := deploy.Pipeline{
 		Store: store,
-		Cloner: deploy.ClonerFunc(func(_ context.Context, req deploy.CloneRequest) (string, error) {
+		Cloner: deploy.ClonerFunc(func(_ context.Context, req deploy.CloneRequest) (deploy.CloneResult, error) {
 			if req.GitURL != "https://github.com/example/web.git" || req.Branch != "main" {
 				t.Fatalf("clone request = %#v", req)
 			}
-			return "cloned\n", nil
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source", Log: "cloned\n"}, nil
 		}),
 		Builder: deploy.BuilderFunc(func(_ context.Context, req deploy.BuildRequest) (deploy.BuildResult, error) {
-			if req.AppID != "app_1" {
+			if req.AppID != "app_1" || req.SourceDir != "work/app_1/dep_1/source" {
 				t.Fatalf("build request = %#v", req)
 			}
 			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1", Log: "built\n"}, nil
@@ -35,9 +35,11 @@ func TestPipelineRecordsSuccessfulStagesInOrder(t *testing.T) {
 	}
 
 	result, err := pipeline.Run(context.Background(), deploy.Request{
-		AppID:  "app_1",
-		GitURL: "https://github.com/example/web.git",
-		Branch: "main",
+		AppID:        "app_1",
+		GitURL:       "https://github.com/example/web.git",
+		Branch:       "main",
+		InternalPort: 3000,
+		Env:          map[string]string{"DATABASE_URL": "postgres://internal"},
 	})
 	if err != nil {
 		t.Fatalf("run pipeline: %v", err)
@@ -64,8 +66,8 @@ func TestPipelineFailureRecordsFailedStageAndRedactedLog(t *testing.T) {
 	store := &fakeDeploymentStore{}
 	pipeline := deploy.Pipeline{
 		Store: store,
-		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (string, error) {
-			return "cloned\n", nil
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source", Log: "cloned\n"}, nil
 		}),
 		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
 			return deploy.BuildResult{Log: "using postgres://secret\n"}, errors.New("docker build failed")
@@ -98,6 +100,38 @@ func TestPipelineFailureRecordsFailedStageAndRedactedLog(t *testing.T) {
 	}
 	if !strings.Contains(last.BuildLog, "[REDACTED]") || !strings.Contains(last.BuildLog, "docker build failed") {
 		t.Fatalf("build log missing redaction or error: %s", last.BuildLog)
+	}
+}
+
+func TestPipelinePassesEnvAndInternalPortToRunner(t *testing.T) {
+	store := &fakeDeploymentStore{}
+	pipeline := deploy.Pipeline{
+		Store: store,
+		Cloner: deploy.ClonerFunc(func(context.Context, deploy.CloneRequest) (deploy.CloneResult, error) {
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source"}, nil
+		}),
+		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
+			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1"}, nil
+		}),
+		Runner: deploy.RunnerFunc(func(_ context.Context, req deploy.RunRequest) (string, error) {
+			if req.InternalPort != 8080 {
+				t.Fatalf("internal port = %d, want 8080", req.InternalPort)
+			}
+			if req.Env["DATABASE_URL"] != "postgres://internal" {
+				t.Fatalf("env = %#v", req.Env)
+			}
+			return "started\n", nil
+		}),
+	}
+
+	if _, err := pipeline.Run(context.Background(), deploy.Request{
+		AppID:        "app_1",
+		GitURL:       "https://github.com/example/web.git",
+		Branch:       "main",
+		InternalPort: 8080,
+		Env:          map[string]string{"DATABASE_URL": "postgres://internal"},
+	}); err != nil {
+		t.Fatalf("run pipeline: %v", err)
 	}
 }
 

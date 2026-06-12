@@ -51,7 +51,7 @@ func TestGitClonerRunsCloneWithArgumentArray(t *testing.T) {
 		Runner: runner,
 	}
 
-	log, err := cloner.Clone(context.Background(), deploy.CloneRequest{
+	result, err := cloner.Clone(context.Background(), deploy.CloneRequest{
 		AppID:        "app_1",
 		DeploymentID: "dep_1",
 		GitURL:       "https://github.com/example/web.git",
@@ -60,8 +60,11 @@ func TestGitClonerRunsCloneWithArgumentArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clone: %v", err)
 	}
-	if log != "cloned\n" {
-		t.Fatalf("log = %q, want cloned newline", log)
+	if result.Log != "cloned\n" {
+		t.Fatalf("log = %q, want cloned newline", result.Log)
+	}
+	if result.SourceDir == "" {
+		t.Fatal("source dir is empty")
 	}
 	if runner.name != "git" {
 		t.Fatalf("command name = %q, want git", runner.name)

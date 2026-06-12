@@ -18,11 +18,11 @@ func TestStoreDeploymentServiceRunsPipelineAndListsDeployments(t *testing.T) {
 		Store: deploy.NewStoreDeploymentStore(queries, func() string {
 			return "dep_1"
 		}),
-		Cloner: deploy.ClonerFunc(func(_ context.Context, req deploy.CloneRequest) (string, error) {
+		Cloner: deploy.ClonerFunc(func(_ context.Context, req deploy.CloneRequest) (deploy.CloneResult, error) {
 			if req.GitURL != "https://github.com/example/web.git" || req.Branch != "main" {
 				t.Fatalf("clone request = %#v", req)
 			}
-			return "cloned\n", nil
+			return deploy.CloneResult{SourceDir: "work/app_1/dep_1/source", Log: "cloned\n"}, nil
 		}),
 		Builder: deploy.BuilderFunc(func(context.Context, deploy.BuildRequest) (deploy.BuildResult, error) {
 			return deploy.BuildResult{ImageTag: "porter/app_1:dep_1", Log: "built\n"}, nil
