@@ -3,9 +3,11 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -14,6 +16,7 @@ import (
 )
 
 type caddyDockerClient interface {
+	ImagePull(ctx context.Context, imageName string, options image.PullOptions) (io.ReadCloser, error)
 	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
 	ContainerRemove(ctx context.Context, containerID string, options container.RemoveOptions) error
 	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
@@ -47,6 +50,9 @@ func (runtime *DockerCaddyRuntime) EnsureCaddy(ctx context.Context, spec CaddyCo
 		return err
 	}
 	if err := runtime.removeExistingContainer(ctx, spec.Name); err != nil {
+		return err
+	}
+	if err := runtime.pullImage(ctx, spec.Image); err != nil {
 		return err
 	}
 
@@ -100,6 +106,18 @@ func (runtime *DockerCaddyRuntime) EnsureCaddy(ctx context.Context, spec CaddyCo
 	}
 	if err := runtime.client.ContainerStart(ctx, created.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("start caddy container: %w", err)
+	}
+	return nil
+}
+
+func (runtime *DockerCaddyRuntime) pullImage(ctx context.Context, imageName string) error {
+	response, err := runtime.client.ImagePull(ctx, imageName, image.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("pull caddy image: %w", err)
+	}
+	defer response.Close()
+	if _, err := io.Copy(io.Discard, response); err != nil {
+		return fmt.Errorf("read caddy image pull output: %w", err)
 	}
 	return nil
 }

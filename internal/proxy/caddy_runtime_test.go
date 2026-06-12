@@ -2,17 +2,23 @@ package proxy_test
 
 import (
 	"context"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/6space7/porter/internal/proxy"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func TestDockerCaddyRuntimeEnsuresCaddyContainer(t *testing.T) {
-	client := &fakeCaddyDockerClient{createID: "caddy_1"}
+	client := &fakeCaddyDockerClient{
+		createID:     "caddy_1",
+		pullResponse: &trackingReadCloser{Reader: strings.NewReader(`{"status":"pulled"}`)},
+	}
 	runtime := proxy.NewDockerCaddyRuntimeWithClient(client)
 
 	if err := runtime.EnsureCaddy(context.Background(), proxy.DefaultCaddyContainerSpec()); err != nil {
@@ -30,6 +36,12 @@ func TestDockerCaddyRuntimeEnsuresCaddyContainer(t *testing.T) {
 	}
 	if client.removedName != "porter-caddy" || !client.removeOptions.Force {
 		t.Fatalf("remove = %q %#v", client.removedName, client.removeOptions)
+	}
+	if client.pulledImage != "caddy:2-alpine" {
+		t.Fatalf("pulled image = %q", client.pulledImage)
+	}
+	if !client.pullResponse.closed {
+		t.Fatal("image pull response was not closed")
 	}
 	if client.createdName != "porter-caddy" {
 		t.Fatalf("created name = %q", client.createdName)
@@ -109,6 +121,10 @@ type fakeCaddyDockerClient struct {
 	containerConfig container.Config
 	hostConfig      container.HostConfig
 	networkConfig   network.NetworkingConfig
+
+	pulledImage  string
+	pullOptions  image.PullOptions
+	pullResponse *trackingReadCloser
 }
 
 func (client *fakeCaddyDockerClient) NetworkCreate(_ context.Context, name string, options network.CreateOptions) (network.CreateResponse, error) {
@@ -123,6 +139,15 @@ func (client *fakeCaddyDockerClient) ContainerRemove(_ context.Context, containe
 	return nil
 }
 
+func (client *fakeCaddyDockerClient) ImagePull(_ context.Context, imageName string, options image.PullOptions) (io.ReadCloser, error) {
+	client.pulledImage = imageName
+	client.pullOptions = options
+	if client.pullResponse != nil {
+		return client.pullResponse, nil
+	}
+	return io.NopCloser(strings.NewReader("")), nil
+}
+
 func (client *fakeCaddyDockerClient) ContainerCreate(_ context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, _ *ocispec.Platform, containerName string) (container.CreateResponse, error) {
 	client.createdName = containerName
 	client.containerConfig = *config
@@ -133,5 +158,15 @@ func (client *fakeCaddyDockerClient) ContainerCreate(_ context.Context, config *
 
 func (client *fakeCaddyDockerClient) ContainerStart(_ context.Context, containerID string, _ container.StartOptions) error {
 	client.startedID = containerID
+	return nil
+}
+
+type trackingReadCloser struct {
+	io.Reader
+	closed bool
+}
+
+func (closer *trackingReadCloser) Close() error {
+	closer.closed = true
 	return nil
 }
