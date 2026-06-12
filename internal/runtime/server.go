@@ -68,6 +68,7 @@ func NewHandlerWithOptions(ctx context.Context, cfg config.Config, opts Options)
 		}),
 		EnvVars:     envVars,
 		Deployments: api.NewStoreDeploymentService(queries, pipeline, envVars),
+		CaddyAsk:    api.NewStoreCaddyAskService(queries),
 	})
 	return db, handler, nil
 }

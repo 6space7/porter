@@ -13,6 +13,7 @@ type Dependencies struct {
 	Domains       DomainService
 	EnvVars       EnvVarService
 	Deployments   DeploymentService
+	CaddyAsk      CaddyAskService
 }
 
 func NewRouter() http.Handler {
@@ -22,6 +23,9 @@ func NewRouter() http.Handler {
 func NewRouterWithDeps(deps Dependencies) http.Handler {
 	router := chi.NewRouter()
 	router.Get("/health", HealthHandler)
+	if deps.CaddyAsk != nil {
+		mountCaddyAskRoutes(router, deps.CaddyAsk)
+	}
 
 	if deps.TokenVerifier != nil {
 		router.Route("/api/v1", func(r chi.Router) {

@@ -2,6 +2,8 @@ package runtime_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -18,7 +20,7 @@ func TestNewHandlerReconcilesCaddyRoutesFromSQLite(t *testing.T) {
 	seedVerifiedDomain(t, ctx, dbPath)
 
 	admin := &fakeCaddyAdmin{}
-	db, _, err := runtime.NewHandlerWithOptions(ctx, config.Config{
+	db, handler, err := runtime.NewHandlerWithOptions(ctx, config.Config{
 		DatabasePath:  dbPath,
 		WorkspacePath: filepath.Join(t.TempDir(), "work"),
 		CaddyAskURL:   "http://127.0.0.1:8080/api/v1/caddy/ask",
@@ -51,6 +53,13 @@ func TestNewHandlerReconcilesCaddyRoutesFromSQLite(t *testing.T) {
 	}
 	if admin.config.HTTP.AskURL != "http://127.0.0.1:8080/api/v1/caddy/ask" {
 		t.Fatalf("ask url = %q", admin.config.HTTP.AskURL)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/caddy/ask?domain=web.example.com", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("ask status = %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
 	}
 }
 
